@@ -225,6 +225,7 @@ export default function App() {
     removeProvider,
     toggleFavoriteModel,
     addManualModel,
+    optimizeCode,
     clearChatAndSave,
     modelSearchQuery,
     setModelSearchQuery,
@@ -258,6 +259,25 @@ export default function App() {
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const isMobile = useBreakpointValue({ base: true, lg: false });
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showCookieConsent, setShowCookieConsent] = useState(false);
+
+  useEffect(() => {
+    const consent = localStorage.getItem('cookie-consent');
+    if (!consent) {
+      setShowCookieConsent(true);
+    }
+  }, []);
+
+  const handleCookieConsent = (accepted: boolean) => {
+    localStorage.setItem('cookie-consent', accepted ? 'accepted' : 'rejected');
+    setShowCookieConsent(false);
+    toast({
+      title: accepted ? "Cookies accepted" : "Cookies rejected",
+      status: accepted ? "success" : "info",
+      duration: 2000,
+    });
+  };
+
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -1437,6 +1457,56 @@ export default function App() {
         </Box>
       </Box>
 
+      {/* Cookie Consent Banner */}
+      <AnimatePresence>
+        {showCookieConsent && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            style={{
+              position: 'fixed',
+              bottom: '20px',
+              left: '20px',
+              right: '20px',
+              zIndex: 9999,
+              display: 'flex',
+              justifyContent: 'center'
+            }}
+          >
+            <Box 
+              bg="#1a1a24" 
+              p={4} 
+              borderRadius="xl" 
+              boxShadow="0 10px 30px rgba(0,0,0,0.5)" 
+              border="1px solid" 
+              borderColor="whiteAlpha.200"
+              maxW="600px"
+              w="full"
+            >
+              <VStack align="stretch" spacing={3}>
+                <HStack justify="space-between">
+                  <HStack>
+                    <Box p={2} bg="blue.500" borderRadius="lg">
+                      <Sparkles size={16} color="white" />
+                    </Box>
+                    <Text fontWeight="bold" fontSize="sm">Cookie Consent</Text>
+                  </HStack>
+                  <CloseButton size="sm" onClick={() => setShowCookieConsent(false)} />
+                </HStack>
+                <Text fontSize="xs" color="whiteAlpha.700">
+                  We use cookies to enhance your experience, analyze site traffic, and personalize content. By clicking "Accept", you consent to our use of cookies.
+                </Text>
+                <HStack justify="flex-end" spacing={3}>
+                  <Button size="xs" variant="ghost" onClick={() => handleCookieConsent(false)}>Reject</Button>
+                  <Button size="xs" colorScheme="blue" onClick={() => handleCookieConsent(true)}>Accept All</Button>
+                </HStack>
+              </VStack>
+            </Box>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Resize Handle */}
       {!isSidebarMinimized && !isMobile && (
         <Box
@@ -1562,21 +1632,41 @@ export default function App() {
           <HStack spacing={4}>
             <HStack spacing={2}>
               {activeTab === 'code' && (
-                <Tooltip label="Refactor Code">
-                  <Button
-                    size="sm"
-                    leftIcon={<RefreshCw size={14} />}
-                    onClick={handleRefactor}
-                    isDisabled={!html || isLoading}
-                    variant="outline"
-                    borderColor="whiteAlpha.200"
-                    fontSize="xs"
-                    colorScheme="cyan"
-                    aria-label="Refactor generated code"
-                  >
-                    Refactor
-                  </Button>
-                </Tooltip>
+                <HStack spacing={2}>
+                  <Tooltip label="Optimize Code (Lazy Loading, Smooth Scroll, etc.)">
+                    <Button
+                      size="sm"
+                      leftIcon={<Zap size={14} />}
+                      onClick={() => {
+                        optimizeCode();
+                        toast({ title: "Code Optimized", description: "Added lazy loading, smooth scroll, and more.", status: "success", duration: 3000 });
+                      }}
+                      isDisabled={!html || isLoading}
+                      variant="outline"
+                      borderColor="whiteAlpha.200"
+                      fontSize="xs"
+                      colorScheme="yellow"
+                      aria-label="Optimize generated code"
+                    >
+                      Optimize
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="Refactor Code">
+                    <Button
+                      size="sm"
+                      leftIcon={<RefreshCw size={14} />}
+                      onClick={handleRefactor}
+                      isDisabled={!html || isLoading}
+                      variant="outline"
+                      borderColor="whiteAlpha.200"
+                      fontSize="xs"
+                      colorScheme="cyan"
+                      aria-label="Refactor generated code"
+                    >
+                      Refactor
+                    </Button>
+                  </Tooltip>
+                </HStack>
               )}
               
               <Tooltip label="Export Options">
