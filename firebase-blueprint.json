@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "A website or component project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the project" },
+        "html": { "type": "string", "description": "The HTML content of the project" },
+        "mode": { "type": "string", "description": "The generation mode (website or component)" },
+        "timestamp": { "type": "number", "description": "Last modified timestamp" },
+        "ownerId": { "type": "string", "description": "The UID of the project owner" },
+        "collaborators": { "type": "array", "items": { "type": "string" }, "description": "List of collaborator UIDs" }
+      },
+      "required": ["name", "html", "mode", "timestamp", "ownerId"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message within a project",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "content": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["role", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Main project documents"
+    },
+    "/projects/{projectId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chat history for a project"
+    }
+  }
+}

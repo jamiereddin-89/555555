@@ -1,0 +1,6 @@
+{
+  "name": "Remix: Gemini AI Site Builder",
+  "description": "A powerful AI-driven web builder that generates and iterates on full websites using Gemini 2.0. Features real-time previews and intelligent code refactoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
