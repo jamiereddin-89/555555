@@ -16,6 +16,7 @@ import {
   Tooltip, 
   Skeleton, 
   SkeletonText,
+  Spacer,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -110,10 +111,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import JSZip from 'jszip';
-import * as prettier from 'prettier';
-import parserHtml from 'prettier/parser-html';
-import parserPostcss from 'prettier/parser-postcss';
-import parserBabel from 'prettier/parser-babel';
 import { saveAs } from 'file-saver';
 import ReactMarkdown from 'react-markdown';
 import { ModelType, ChatMessage } from './lib/gemini';
@@ -175,8 +172,7 @@ export default function App() {
     lastAutoSaveTime,
     isSaving,
     isFetchingModels,
-    isGeneratingImage: isGeneratingImageStore,
-    testConnection
+    isGeneratingImage: isGeneratingImageStore
   } = useStore();
 
   const [user] = useAuthState(auth);
@@ -190,8 +186,6 @@ export default function App() {
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
-  const [localSearchQuery, setLocalSearchQuery] = useState('');
-  const [showSavedFeedback, setShowSavedFeedback] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const toast = useToast();
@@ -204,54 +198,6 @@ export default function App() {
   const { isOpen: isVersionsOpen, onOpen: onVersionsOpen, onClose: onVersionsClose } = useDisclosure();
   const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
   const { isOpen: isProviderDetailOpen, onOpen: onProviderDetailOpen, onClose: onProviderDetailClose } = useDisclosure();
-  const { isOpen: isTemplatesOpen, onOpen: onTemplatesOpen, onClose: onTemplatesClose } = useDisclosure();
-
-  const formatCode = async () => {
-    if (!html) return;
-    try {
-      const formatted = await prettier.format(html, {
-        parser: 'html',
-        plugins: [parserHtml, parserPostcss, parserBabel],
-        printWidth: 100,
-        tabWidth: 2,
-        useTabs: false,
-        semi: true,
-        singleQuote: false,
-      });
-      setHtml(formatted);
-      toast({
-        title: "Code Formatted",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-        position: "bottom-right",
-      });
-    } catch (err) {
-      console.error("Formatting failed", err);
-      toast({
-        title: "Formatting Failed",
-        description: "Check your code for syntax errors.",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchQuery(localSearchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [localSearchQuery, setSearchQuery]);
-
-  useEffect(() => {
-    if (lastAutoSaveTime) {
-      setShowSavedFeedback(true);
-      const timer = setTimeout(() => setShowSavedFeedback(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [lastAutoSaveTime]);
 
   // Auto-save effect
   useEffect(() => {
@@ -384,13 +330,11 @@ export default function App() {
 
     // Add Keyboard Shortcuts
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      formatCode().then(() => {
-        saveProject(projectName || 'Untitled Project');
-      });
+      saveProject(projectName || 'Untitled Project');
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
-      formatCode();
+      editor.getAction('editor.action.formatDocument')?.run();
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
@@ -813,17 +757,6 @@ export default function App() {
                 _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
               />
             </Tooltip>
-            <Tooltip label="Generate Image (Imagen)">
-              <IconButton
-                aria-label="Imagen"
-                icon={<Layout size={16} />}
-                variant="ghost"
-                size="sm"
-                onClick={onImageOpen}
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
             <Tooltip label="Versions">
               <IconButton
                 aria-label="Versions"
@@ -906,10 +839,24 @@ export default function App() {
                 onClick={() => { setModel(ModelType.PRO); setIsThinking(true); }}
               />
             </Tooltip>
+            <Tooltip label="Generate Image (Imagen)">
+              <IconButton
+                aria-label="Imagen"
+                icon={<Layout size={16} />}
+                size="sm"
+                borderRadius="full"
+                variant="outline"
+                colorScheme="pink"
+                onClick={onImageOpen}
+              />
+            </Tooltip>
             <Divider orientation="vertical" h={4} />
-            <Text fontSize="10px" color="whiteAlpha.500" fontWeight="bold">
-              {model.split('/').pop()?.replace('gemini-', '')}
-            </Text>
+            <VStack align="start" spacing={0}>
+              <Text fontSize="10px" color="whiteAlpha.500" fontWeight="bold">
+                {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split('/').pop()?.replace('gemini-', '') : model}
+              </Text>
+              {isThinking && <Text fontSize="8px" color="purple.400" fontWeight="bold">THINKING ENABLED</Text>}
+            </VStack>
             {currentProjectId && (
               <HStack spacing={-2} pl={2}>
                 <Tooltip label="Active Collaboration">
@@ -917,6 +864,26 @@ export default function App() {
                 </Tooltip>
               </HStack>
             )}
+          </HStack>
+
+          {/* Integrated Status Bar */}
+          <HStack w="full" px={4} py={1.5} spacing={4} bg="whiteAlpha.50" borderBottom="1px solid" borderColor="whiteAlpha.100" fontSize="9px" color="whiteAlpha.400">
+            <HStack spacing={2}>
+              <Box w={1.2} h={1.2} borderRadius="full" bg={isSaving ? "blue.400" : (isDirty ? "orange.400" : "green.400")} />
+              <Text color="whiteAlpha.600" fontWeight="medium">
+                {isSaving ? "Saving..." : (isDirty ? "Unsaved" : "Saved")}
+              </Text>
+            </HStack>
+            {lastAutoSaveTime && (
+              <HStack spacing={1}>
+                <SaveAll size={8} color="gray" />
+                <Text>{new Date(lastAutoSaveTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </HStack>
+            )}
+            <Divider orientation="vertical" h={2} />
+            <Text textTransform="uppercase">{generationMode}</Text>
+            <Spacer />
+            <Text opacity={0.6}>Powered by Gemini 2.0</Text>
           </HStack>
           
           {generationMode === 'component' && (
@@ -957,44 +924,6 @@ export default function App() {
                 aria-label="Generate Navbar Component"
               >
                 Navbar
-              </Button>
-              <Button 
-                size="xs" 
-                variant="ghost" 
-                fontSize="9px" 
-                onClick={() => executeAiAction("Generate a responsive image gallery with a lightbox effect.")}
-                aria-label="Generate Image Gallery Component"
-              >
-                Gallery
-              </Button>
-              <Button 
-                size="xs" 
-                variant="ghost" 
-                fontSize="9px" 
-                onClick={() => executeAiAction("Generate a stylish FAQ section with accordion items.")}
-                aria-label="Generate FAQ Component"
-              >
-                FAQ
-              </Button>
-              <Button 
-                size="xs" 
-                variant="ghost" 
-                fontSize="9px" 
-                onClick={() => executeAiAction("Generate a testimonial card with a quote, author image, and name.")}
-                aria-label="Generate Testimonial Component"
-              >
-                Testimonial
-              </Button>
-              <Divider orientation="vertical" h={3} />
-              <Button 
-                size="xs" 
-                variant="solid" 
-                colorScheme="purple"
-                fontSize="9px" 
-                onClick={onTemplatesOpen}
-                leftIcon={<Layout size={10} />}
-              >
-                Templates
               </Button>
             </HStack>
           )}
@@ -1052,13 +981,8 @@ export default function App() {
                   <Text fontSize="xs" color="blue.400" fontWeight="bold">AI is generating...</Text>
                 </HStack>
                 <Box w="full" p={3} borderRadius="2xl" bg="whiteAlpha.50" border="1px dashed" borderColor="whiteAlpha.200">
-                  <VStack align="stretch" spacing={3}>
-                    <SkeletonText noOfLines={3} spacing="2" skeletonHeight="2" />
-                    <HStack justify="space-between">
-                      <Text fontSize="10px" color="whiteAlpha.400">Analyzing requirements...</Text>
-                      <Progress w="60%" size="xs" isIndeterminate borderRadius="full" colorScheme="blue" />
-                    </HStack>
-                  </VStack>
+                  <SkeletonText noOfLines={3} spacing="2" skeletonHeight="2" />
+                  <Progress size="xs" isIndeterminate colorScheme="blue" mt={4} borderRadius="full" />
                 </Box>
               </VStack>
             </Flex>
@@ -1107,7 +1031,7 @@ export default function App() {
 
         {/* Input Area */}
         <Box p={4} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#0d0d11">
-          <HStack position="relative">
+          <Box position="relative">
             <Textarea
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
@@ -1141,70 +1065,7 @@ export default function App() {
               onClick={handleSend}
               isDisabled={isLoading || !userInput.trim()}
             />
-          </HStack>
-          
-          {/* Status Bar integrated below input */}
-          <Flex mt={3} align="center" justify="space-between" fontSize="10px" color="whiteAlpha.400">
-            <HStack spacing={4}>
-              <HStack spacing={2}>
-                <Box w={1.5} h={1.5} borderRadius="full" bg={isSaving ? "blue.400" : (isDirty ? "orange.400" : "green.400")} />
-                <Text color="whiteAlpha.600">
-                  {isSaving ? "Saving..." : (isDirty ? "Unsaved changes" : "All changes saved")}
-                </Text>
-              </HStack>
-              {lastAutoSaveTime && (
-                <HStack spacing={1}>
-                  <AnimatePresence mode="wait">
-                    {isSaving ? (
-                      <motion.div
-                        key="saving"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1, rotate: 360 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
-                      >
-                        <RefreshCw size={10} color="#4299E1" />
-                      </motion.div>
-                    ) : showSavedFeedback ? (
-                      <motion.div
-                        key="saved"
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1.2 }}
-                        exit={{ opacity: 0, scale: 0.5 }}
-                      >
-                        <Check size={10} color="#48BB78" />
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="idle"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                      >
-                        <SaveAll size={10} color="gray" />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                  <Text color="whiteAlpha.400">
-                    Auto-saved: {new Date(lastAutoSaveTime).toLocaleTimeString()}
-                  </Text>
-                </HStack>
-              )}
-              <Divider orientation="vertical" h={3} />
-              <HStack spacing={1}>
-                <BrainCircuit size={10} />
-                <Text>
-                  {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split('/').pop() : model}
-                  {isThinking && " (Thinking)"}
-                </Text>
-              </HStack>
-              <Divider orientation="vertical" h={3} />
-              <Text>Mode: {generationMode.toUpperCase()}</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Text>Powered by Gemini 2.0</Text>
-            </HStack>
-          </Flex>
-          
+          </Box>
           <Text fontSize="10px" color="whiteAlpha.400" mt={2} textAlign="center">
             Press Enter to send. Shift+Enter for new line.
           </Text>
@@ -1295,20 +1156,6 @@ export default function App() {
                 <Tooltip label="Mobile View">
                   <IconButton aria-label="Mobile" icon={<Smartphone size={16} />} size="xs" variant={previewMode === 'mobile' ? 'solid' : 'ghost'} colorScheme={previewMode === 'mobile' ? 'blue' : 'gray'} onClick={() => setPreviewMode('mobile')} />
                 </Tooltip>
-                
-                <Menu size="xs">
-                  <Tooltip label="Responsive Breakpoints">
-                    <MenuButton as={IconButton} icon={<Layout size={14} />} size="xs" variant="ghost" />
-                  </Tooltip>
-                  <Portal>
-                    <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" fontSize="xs">
-                      <MenuItem onClick={() => setPreviewMode('mobile')} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Mobile (375px)</MenuItem>
-                      <MenuItem onClick={() => setPreviewMode('tablet')} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Tablet (768px)</MenuItem>
-                      <MenuItem onClick={() => setPreviewMode('desktop')} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Desktop (1024px)</MenuItem>
-                      <MenuItem onClick={() => setPreviewMode('desktop')} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Wide (1440px)</MenuItem>
-                    </MenuList>
-                  </Portal>
-                </Menu>
               </HStack>
             )}
           </HStack>
@@ -1447,7 +1294,7 @@ export default function App() {
                         variant="solid" 
                         bg="whiteAlpha.100" 
                         _hover={{ bg: 'whiteAlpha.200' }}
-                        onClick={formatCode}
+                        onClick={() => editorRef.current?.getAction('editor.action.formatDocument')?.run()}
                       />
                     </Tooltip>
                     <Tooltip label="Save Project (Ctrl+S)">
@@ -1481,107 +1328,7 @@ export default function App() {
             )}
           </AnimatePresence>
         </Box>
-
-        {/* Footer / Status Bar */}
-        <Flex h={8} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#16161e" align="center" justify="space-between" px={4} fontSize="10px" color="whiteAlpha.400">
-          <HStack spacing={4}>
-            <HStack spacing={2}>
-              <Box w={1.5} h={1.5} borderRadius="full" bg={isSaving ? "blue.400" : (isDirty ? "orange.400" : "green.400")} />
-              <Text color="whiteAlpha.600">
-                {isSaving ? "Saving..." : (isDirty ? "Unsaved changes" : "All changes saved")}
-              </Text>
-            </HStack>
-            {lastAutoSaveTime && (
-              <HStack spacing={1}>
-                <AnimatePresence mode="wait">
-                  {isSaving ? (
-                    <motion.div
-                      key="saving"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1, rotate: 360 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ rotate: { duration: 1, repeat: Infinity, ease: "linear" } }}
-                    >
-                      <RefreshCw size={10} color="#4299E1" />
-                    </motion.div>
-                  ) : showSavedFeedback ? (
-                    <motion.div
-                      key="saved"
-                      initial={{ opacity: 0, scale: 0.5 }}
-                      animate={{ opacity: 1, scale: 1.2 }}
-                      exit={{ opacity: 0, scale: 0.5 }}
-                    >
-                      <Check size={10} color="#48BB78" />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="idle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <SaveAll size={10} color="gray" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <Text color="whiteAlpha.400">
-                  Auto-saved: {new Date(lastAutoSaveTime).toLocaleTimeString()}
-                </Text>
-              </HStack>
-            )}
-            <Divider orientation="vertical" h={3} />
-            <Text>Model: {typeof model === 'string' ? model.split('/').pop() : model}</Text>
-            <Divider orientation="vertical" h={3} />
-            <Text>Mode: {generationMode.toUpperCase()}</Text>
-          </HStack>
-          <HStack spacing={3}>
-            <Text>Responsive Design Enabled</Text>
-            <Text>•</Text>
-            <Text>Powered by Gemini 2.0</Text>
-          </HStack>
-        </Flex>
       </Flex>
-
-      {/* Templates Modal */}
-      <Modal isOpen={isTemplatesOpen} onClose={onTemplatesClose} size="4xl">
-        <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent bg="#1a1a24" color="white" borderColor="whiteAlpha.200" border="1px solid">
-          <ModalHeader fontSize="md">Website Templates</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Grid templateColumns="repeat(3, 1fr)" gap={6}>
-              {[
-                { name: 'SaaS Landing Page', desc: 'Modern landing page with hero, features, and pricing.', prompt: 'Generate a modern SaaS landing page with a dark theme, featuring a hero section with a primary CTA, a 3-column feature grid with icons, a pricing table with 3 tiers, and a FAQ accordion section. Use Inter font and Tailwind blue-600 for accents.' },
-                { name: 'Portfolio', desc: 'Minimalist portfolio for designers and developers.', prompt: 'Generate a minimalist personal portfolio website. Include a clean header, a hero section with a large profile image placeholder, a masonry project gallery, an "About Me" section, and a simple contact footer. Use a sophisticated serif font for headings.' },
-                { name: 'E-commerce', desc: 'Clean product listing and detail page layout.', prompt: 'Generate a clean e-commerce homepage. Include a promotional banner, a featured products grid with hover effects, category navigation, and a newsletter signup. Use a clean sans-serif font and neutral color palette.' },
-                { name: 'Agency Website', desc: 'Professional site for creative agencies.', prompt: 'Generate a professional creative agency website. Include a bold hero section with video placeholder background, a services section with hover animations, a team grid, and a client logo carousel. Use a high-contrast black and white theme.' },
-                { name: 'Blog / Magazine', desc: 'Content-focused layout with sidebar and grid.', prompt: 'Generate a content-focused blog homepage. Include a featured post hero, a grid of recent articles with categories and read times, a sidebar with popular posts and tags, and a clean pagination footer.' },
-                { name: 'Event Landing', desc: 'Single page for conferences or webinars.', prompt: 'Generate an event landing page for a tech conference. Include a countdown timer, speaker lineup grid, schedule table, location map placeholder, and ticket registration form.' }
-              ].map((template) => (
-                <Box 
-                  key={template.name}
-                  p={4}
-                  bg="whiteAlpha.50"
-                  borderRadius="xl"
-                  border="1px solid"
-                  borderColor="whiteAlpha.100"
-                  cursor="pointer"
-                  _hover={{ bg: 'whiteAlpha.100', borderColor: 'blue.500', transform: 'translateY(-2px)' }}
-                  transition="all 0.2s"
-                  onClick={() => { executeAiAction(template.prompt); onTemplatesClose(); }}
-                >
-                  <VStack align="start" spacing={2}>
-                    <Box w="full" h="100px" bg="whiteAlpha.100" borderRadius="lg" display="flex" alignItems="center" justifyContent="center">
-                      <Layout size={32} color="gray" />
-                    </Box>
-                    <Text fontWeight="bold" fontSize="sm">{template.name}</Text>
-                    <Text fontSize="xs" color="whiteAlpha.500">{template.desc}</Text>
-                  </VStack>
-                </Box>
-              ))}
-            </Grid>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
 
       {/* Imagen Modal */}
       <Modal isOpen={isImageOpen} onClose={onImageClose}>
@@ -1661,8 +1408,8 @@ export default function App() {
                   placeholder="Search projects..." 
                   bg="whiteAlpha.50" 
                   borderColor="whiteAlpha.200"
-                  value={localSearchQuery}
-                  onChange={(e) => setLocalSearchQuery(e.target.value)}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </InputGroup>
             </VStack>
@@ -1671,24 +1418,7 @@ export default function App() {
             ) : (
               <VStack spacing={2} align="stretch">
                 {filteredProjects?.map(project => (
-                  <HStack 
-                    key={project.id} 
-                    p={3} 
-                    bg={currentProjectId === project.id ? "whiteAlpha.200" : "whiteAlpha.50"} 
-                    borderRadius="lg" 
-                    justify="space-between" 
-                    cursor="pointer"
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Project: ${project.name}`}
-                    className="w-full transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none hover:bg-white/10 hover:shadow-md"
-                    onClick={() => { loadProject(project.id); setProjectName(project.name); onLoadClose(); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        loadProject(project.id); setProjectName(project.name); onLoadClose();
-                      }
-                    }}
-                  >
+                  <HStack key={project.id} p={3} bg="whiteAlpha.50" borderRadius="lg" justify="space-between" _hover={{ bg: 'whiteAlpha.100' }}>
                     <VStack align="start" spacing={0}>
                       <HStack>
                         <Text fontSize="sm" fontWeight="bold">{project.name}</Text>
@@ -1790,32 +1520,23 @@ export default function App() {
 
                     <VStack align="stretch" spacing={2} maxH="200px" overflowY="auto" className="no-scrollbar">
                       {filteredProviders?.map(provider => (
-                        <HStack 
-                          key={provider.id} 
-                          p={2} 
-                          bg={settings.activeProviderId === provider.id ? "whiteAlpha.200" : "whiteAlpha.50"} 
-                          borderRadius="md" 
-                          justify="space-between" 
-                          cursor="pointer"
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`AI Provider: ${provider.name}`}
-                          className="w-full transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none hover:bg-white/10 hover:shadow-md"
-                          onClick={() => updateSettings({ activeProviderId: provider.id })}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              updateSettings({ activeProviderId: provider.id });
-                            }
-                          }}
-                        >
-                          <HStack spacing={3} flex={1} onClick={(e) => { e.stopPropagation(); setSelectedProvider(provider); onProviderDetailOpen(); }}>
+                        <HStack key={provider.id} p={2} bg="whiteAlpha.50" borderRadius="md" justify="space-between" _hover={{ bg: 'whiteAlpha.100' }}>
+                          <HStack spacing={3} flex={1} cursor="pointer" onClick={() => { setSelectedProvider(provider); onProviderDetailOpen(); }}>
                             <VStack align="start" spacing={0}>
                               <Text fontSize="xs" fontWeight="bold">{provider.name}</Text>
                               <Text fontSize="10px" color="whiteAlpha.400">{provider.id === 'google' ? 'Default' : (provider.baseUrl || 'OpenAI Compatible')}</Text>
                             </VStack>
                             <Info size={12} color="gray" />
                           </HStack>
-                          <HStack onClick={(e) => e.stopPropagation()}>
+                          <HStack>
+                            <Button 
+                              size="xs" 
+                              variant={settings.activeProviderId === provider.id ? 'solid' : 'ghost'}
+                              colorScheme={settings.activeProviderId === provider.id ? 'blue' : 'gray'}
+                              onClick={() => updateSettings({ activeProviderId: provider.id })}
+                            >
+                              {settings.activeProviderId === provider.id ? 'Active' : 'Select'}
+                            </Button>
                             {provider.id !== 'google' && (
                               <IconButton 
                                 aria-label="Remove" 
@@ -2023,16 +1744,8 @@ export default function App() {
                     bg="whiteAlpha.50" 
                     borderRadius="lg" 
                     cursor="pointer"
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Version: ${v.description}`}
-                    className="w-full transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none hover:bg-white/10 hover:shadow-md"
+                    _hover={{ bg: 'whiteAlpha.100' }}
                     onClick={() => { revertToVersion(v.id); onVersionsClose(); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        revertToVersion(v.id); onVersionsClose();
-                      }
-                    }}
                     position="relative"
                   >
                     <HStack justify="space-between">

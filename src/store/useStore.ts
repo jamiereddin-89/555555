@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, getDoc, getDocFromServer } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, collection, addDoc, query, orderBy, getDoc } from 'firebase/firestore';
 import { 
   ModelType, 
   ChatMessage, 
@@ -133,58 +133,6 @@ interface AppState {
   // Firebase Sync
   syncProject: (projectId: string) => void;
   stopSync: () => void;
-  testConnection: () => Promise<void>;
-}
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
 
 export const useStore = create<AppState>()(
@@ -375,23 +323,15 @@ export const useStore = create<AppState>()(
           const { currentProjectId } = get();
           if (currentProjectId && auth.currentUser) {
             const projectRef = doc(db, 'projects', currentProjectId);
-            try {
-              await setDoc(projectRef, { html: cleanedHtml, timestamp: Date.now() }, { merge: true });
-            } catch (error) {
-              handleFirestoreError(error, OperationType.WRITE, `projects/${currentProjectId}`);
-            }
+            await setDoc(projectRef, { html: cleanedHtml, timestamp: Date.now() }, { merge: true });
             
             // Add message to subcollection
             const messageRef = collection(db, 'projects', currentProjectId, 'messages');
-            try {
-              await addDoc(messageRef, {
-                role: 'model',
-                content: actionType === 'update' ? "I've updated the site." : `I've generated your ${generationMode}.`,
-                timestamp: Date.now()
-              });
-            } catch (error) {
-              handleFirestoreError(error, OperationType.CREATE, `projects/${currentProjectId}/messages`);
-            }
+            await addDoc(messageRef, {
+              role: 'model',
+              content: actionType === 'update' ? "I've updated the site." : `I've generated your ${generationMode}.`,
+              timestamp: Date.now()
+            });
           }
 
           get().pushToHistory(cleanedHtml);
@@ -457,15 +397,11 @@ export const useStore = create<AppState>()(
         // Sync to Firestore if logged in
         if (auth.currentUser && !isAutoSave) {
           const projectRef = doc(db, 'projects', id);
-          try {
-            await setDoc(projectRef, {
-              ...newProject,
-              ownerId: auth.currentUser.uid,
-              collaborators: []
-            }, { merge: true });
-          } catch (error) {
-            handleFirestoreError(error, OperationType.WRITE, `projects/${id}`);
-          }
+          await setDoc(projectRef, {
+            ...newProject,
+            ownerId: auth.currentUser.uid,
+            collaborators: []
+          }, { merge: true });
         }
 
         const existingIndex = savedProjects.findIndex(p => p.id === id);
@@ -709,8 +645,6 @@ export const useStore = create<AppState>()(
               });
             }
           }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `projects/${projectId}`);
         });
 
         // Listen for messages
@@ -721,8 +655,6 @@ export const useStore = create<AppState>()(
           if (JSON.stringify(messages) !== JSON.stringify(get().messages)) {
             set({ messages });
           }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.LIST, `projects/${projectId}/messages`);
         });
 
         // Store unsubscribes in a way we can call them later
@@ -734,17 +666,6 @@ export const useStore = create<AppState>()(
         if (unsubscribes) {
           unsubscribes.forEach((unsub: any) => unsub());
           (window as any)._firebaseUnsubscribes = null;
-        }
-      },
-
-      testConnection: async () => {
-        try {
-          await getDocFromServer(doc(db, 'test', 'connection'));
-        } catch (error) {
-          if (error instanceof Error && error.message.includes('the client is offline')) {
-            console.error("Please check your Firebase configuration. ");
-          }
-          // Skip logging for other errors, as this is simply a connection test.
         }
       }
     }),
