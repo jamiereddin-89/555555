@@ -108,7 +108,9 @@ import {
   PanelLeftOpen,
   GripVertical,
   ArrowUp,
-  FileCode2
+  FileCode2,
+  Star,
+  Edit3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Editor, { OnMount } from '@monaco-editor/react';
@@ -169,7 +171,9 @@ export default function App() {
     stopSync,
     copyProject,
     addProvider,
+    updateProvider,
     removeProvider,
+    toggleFavoriteModel,
     lastSavedHtml,
     lastAutoSaveTime,
     isSaving,
@@ -185,6 +189,7 @@ export default function App() {
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
   const [newProvider, setNewProvider] = useState({ name: '', apiKey: '', baseUrl: '' });
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
@@ -676,6 +681,51 @@ export default function App() {
     });
   };
 
+  const handleUpdateProvider = async () => {
+    if (!editingProviderId || !newProvider.name || !newProvider.apiKey) return;
+    updateProvider(editingProviderId, {
+      name: newProvider.name,
+      apiKey: newProvider.apiKey,
+      baseUrl: newProvider.baseUrl
+    });
+    setEditingProviderId(null);
+    setNewProvider({ name: '', apiKey: '', baseUrl: '' });
+    toast({
+      title: "Provider Updated",
+      status: "success",
+      duration: 2000,
+    });
+  };
+
+  const startEditingProvider = (provider: AIProvider) => {
+    setEditingProviderId(provider.id);
+    setNewProvider({
+      name: provider.name,
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl || ''
+    });
+    setShowAddProvider(true);
+  };
+
+  const handleTestConnection = async (providerId: string) => {
+    try {
+      await fetchModels(providerId);
+      toast({
+        title: "Connection Successful",
+        description: "Models fetched successfully.",
+        status: "success",
+        duration: 3000,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Connection Failed",
+        description: err.message || "Could not connect to provider.",
+        status: "error",
+        duration: 5000,
+      });
+    }
+  };
+
   const handleTestKey = async () => {
     try {
       await fetchModels();
@@ -720,11 +770,11 @@ export default function App() {
     }
   };
 
-  const filteredProviders = settings.providers.filter(p => 
+  const filteredProviders = (settings.providers || []).filter(p => 
     p.name.toLowerCase().includes(providerSearchQuery.toLowerCase())
   );
 
-  const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+  const activeProvider = (settings.providers || []).find(p => p.id === settings.activeProviderId);
   const currentAvailableModels = activeProvider?.availableModels || [];
 
   return (
@@ -1088,6 +1138,66 @@ export default function App() {
 
         {/* Input Area */}
         <Box p={4} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#0d0d11">
+          <HStack mb={2} spacing={2}>
+            <Menu size="sm">
+              <MenuButton 
+                as={Button} 
+                size="xs" 
+                variant="outline" 
+                rightIcon={<ChevronDown size={12} />}
+                fontSize="10px"
+                bg="whiteAlpha.50"
+                borderColor="whiteAlpha.200"
+                _hover={{ bg: 'whiteAlpha.100' }}
+              >
+                {typeof model === 'string' ? model.split('/').pop() : model}
+              </MenuButton>
+              <Portal>
+                <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
+                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
+                  {(settings.favoriteModels || []).map(m => (
+                    <MenuItem 
+                      key={m} 
+                      fontSize="xs" 
+                      bg="transparent" 
+                      _hover={{ bg: 'whiteAlpha.100' }}
+                      onClick={() => setModel(m)}
+                    >
+                      {m.split('/').pop()}
+                    </MenuItem>
+                  ))}
+                  <Divider my={1} borderColor="whiteAlpha.100" />
+                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
+                  {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].map(m => (
+                    <MenuItem 
+                      key={m} 
+                      fontSize="xs" 
+                      bg="transparent" 
+                      _hover={{ bg: 'whiteAlpha.100' }}
+                      onClick={() => setModel(m)}
+                    >
+                      {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
+                    </MenuItem>
+                  ))}
+                  {currentAvailableModels?.map(m => (
+                    <MenuItem 
+                      key={m.name} 
+                      fontSize="xs" 
+                      bg="transparent" 
+                      _hover={{ bg: 'whiteAlpha.100' }}
+                      onClick={() => setModel(m.name)}
+                    >
+                      {m.displayName || m.name}
+                    </MenuItem>
+                  ))}
+                  <Divider my={1} borderColor="whiteAlpha.100" />
+                  <MenuItem fontSize="xs" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} onClick={onSettingsOpen}>
+                    Manage Models...
+                  </MenuItem>
+                </MenuList>
+              </Portal>
+            </Menu>
+          </HStack>
           <Box position="relative">
             <Textarea
               value={userInput}
@@ -1654,23 +1764,36 @@ export default function App() {
                               value={newProvider.baseUrl}
                               onChange={(e) => setNewProvider({ ...newProvider, baseUrl: e.target.value })}
                             />
-                            <Button size="sm" w="full" colorScheme="blue" onClick={handleAddProvider}>Add Provider</Button>
+                            <Button size="sm" w="full" colorScheme="blue" onClick={editingProviderId ? handleUpdateProvider : handleAddProvider}>
+                              {editingProviderId ? 'Update Provider' : 'Add Provider'}
+                            </Button>
                           </VStack>
                         </motion.div>
                       )}
                     </AnimatePresence>
 
-                    <VStack align="stretch" spacing={2} maxH="200px" overflowY="auto" className="no-scrollbar">
+                    <VStack align="stretch" spacing={2} className="no-scrollbar">
                       {filteredProviders?.map(provider => (
                         <HStack key={provider.id} p={2} bg="whiteAlpha.50" borderRadius="md" justify="space-between" _hover={{ bg: 'whiteAlpha.100' }}>
-                          <HStack spacing={3} flex={1} cursor="pointer" onClick={() => { setSelectedProvider(provider); onProviderDetailOpen(); }}>
+                          <HStack spacing={3} flex={1} cursor="pointer" onClick={() => startEditingProvider(provider)}>
                             <VStack align="start" spacing={0}>
                               <Text fontSize="xs" fontWeight="bold">{provider.name}</Text>
                               <Text fontSize="10px" color="whiteAlpha.400">{provider.id === 'google' ? 'Default' : (provider.baseUrl || 'OpenAI Compatible')}</Text>
                             </VStack>
-                            <Info size={12} color="gray" />
+                            <Edit3 size={12} color="gray" />
                           </HStack>
                           <HStack>
+                            <Tooltip label="Test Connection">
+                              <IconButton 
+                                aria-label="Test Connection" 
+                                icon={<RefreshCw size={12} />} 
+                                size="xs" 
+                                variant="ghost" 
+                                colorScheme="teal"
+                                onClick={() => handleTestConnection(provider.id)}
+                                isLoading={isFetchingModels && settings.activeProviderId === provider.id}
+                              />
+                            </Tooltip>
                             <Button 
                               size="xs" 
                               variant={settings.activeProviderId === provider.id ? 'solid' : 'ghost'}
@@ -1708,6 +1831,11 @@ export default function App() {
                 </AccordionButton>
                 <AccordionPanel px={0} pt={2}>
                   <VStack align="stretch" spacing={4}>
+                    <FormControl display="flex" alignItems="center" justifyContent="space-between">
+                      <FormLabel mb="0" fontSize="xs" color="whiteAlpha.600">Show free only</FormLabel>
+                      <Switch size="sm" isChecked={settings.showFreeOnly} onChange={(e) => updateSettings({ showFreeOnly: e.target.checked })} />
+                    </FormControl>
+
                     <FormControl>
                       <FormLabel fontSize="xs" color="whiteAlpha.600">Active Model</FormLabel>
                       <HStack>
@@ -1740,6 +1868,36 @@ export default function App() {
                         </Tooltip>
                       </HStack>
                     </FormControl>
+
+                    <Box p={3} bg="whiteAlpha.50" borderRadius="lg">
+                      <Text fontSize="xs" fontWeight="bold" mb={2} color="whiteAlpha.700">Favorite Models</Text>
+                      <VStack align="stretch" spacing={2} maxH="150px" overflowY="auto" className="no-scrollbar">
+                        {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].map(m => (
+                          <HStack key={m} justify="space-between" p={1}>
+                            <Text fontSize="xs">{m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}</Text>
+                            <IconButton 
+                              aria-label="Favorite" 
+                              icon={<Star size={12} fill={(settings.favoriteModels || []).includes(m) ? "gold" : "transparent"} color={(settings.favoriteModels || []).includes(m) ? "gold" : "gray"} />} 
+                              size="xs" 
+                              variant="ghost" 
+                              onClick={() => toggleFavoriteModel(m)}
+                            />
+                          </HStack>
+                        ))}
+                        {currentAvailableModels?.map(m => (
+                          <HStack key={m.name} justify="space-between" p={1}>
+                            <Text fontSize="xs">{m.displayName || m.name}</Text>
+                            <IconButton 
+                              aria-label="Favorite" 
+                              icon={<Star size={12} fill={(settings.favoriteModels || []).includes(m.name) ? "gold" : "transparent"} color={(settings.favoriteModels || []).includes(m.name) ? "gold" : "gray"} />} 
+                              size="xs" 
+                              variant="ghost" 
+                              onClick={() => toggleFavoriteModel(m.name)}
+                            />
+                          </HStack>
+                        ))}
+                      </VStack>
+                    </Box>
 
                     <FormControl display="flex" alignItems="center" justifyContent="space-between">
                       <FormLabel mb="0" fontSize="xs" color="whiteAlpha.600">Enable Thinking (Gemini Pro only)</FormLabel>

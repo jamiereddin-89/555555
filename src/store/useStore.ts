@@ -55,6 +55,8 @@ export interface AppSettings {
   customModel: string;
   providers: AIProvider[];
   activeProviderId: string;
+  favoriteModels: string[];
+  showFreeOnly: boolean;
 }
 
 interface AppState {
@@ -128,7 +130,9 @@ interface AppState {
   fetchModels: (providerId?: string) => Promise<void>;
   generateImageAction: (prompt: string) => Promise<void>;
   addProvider: (provider: Omit<AIProvider, 'id' | 'availableModels'>) => Promise<void>;
+  updateProvider: (id: string, provider: Partial<AIProvider>) => void;
   removeProvider: (id: string) => void;
+  toggleFavoriteModel: (modelId: string) => void;
   
   // Firebase Sync
   syncProject: (projectId: string) => void;
@@ -175,6 +179,8 @@ export const useStore = create<AppState>()(
           { id: 'google', name: 'Google Gemini', apiKey: '', availableModels: [] }
         ],
         activeProviderId: 'google',
+        favoriteModels: [ModelType.FLASH, ModelType.PRO],
+        showFreeOnly: false,
       },
 
       setHtml: (html) => {
@@ -643,6 +649,38 @@ export const useStore = create<AppState>()(
         }));
       },
 
+      updateProvider: (id, providerData) => {
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            providers: state.settings.providers.map(p => 
+              p.id === id ? { ...p, ...providerData } : p
+            )
+          }
+        }));
+      },
+
+      toggleFavoriteModel: (modelId) => {
+        set((state) => {
+          const currentFavorites = Array.isArray(state.settings.favoriteModels) 
+            ? state.settings.favoriteModels 
+            : [];
+          const favorites = [...currentFavorites];
+          const index = favorites.indexOf(modelId);
+          if (index > -1) {
+            favorites.splice(index, 1);
+          } else {
+            favorites.push(modelId);
+          }
+          return {
+            settings: {
+              ...state.settings,
+              favoriteModels: favorites
+            }
+          };
+        });
+      },
+
       generateImageAction: async (prompt: string) => {
         set({ isLoading: true });
         try {
@@ -715,20 +753,49 @@ export const useStore = create<AppState>()(
         isThinking: state.isThinking,
         settings: state.settings
       }),
-      version: 4,
+      version: 5,
       migrate: (persistedState: any, version: number) => {
-        if (version < 4) {
-          // Ensure settings and providers exist
-          const state = persistedState as any;
-          if (state.settings && !state.settings.providers) {
-            state.settings.providers = [
-              { id: 'google', name: 'Google Gemini', apiKey: state.settings.apiKey || '', availableModels: [] }
-            ];
-            state.settings.activeProviderId = 'google';
-          }
+        const state = persistedState as any;
+        
+        // Ensure settings object exists
+        if (!state.settings) {
+          state.settings = {
+            theme: 'vs-dark',
+            fontSize: 14,
+            autoPreview: true,
+            wordWrap: 'on',
+            minimap: false,
+            apiKey: '',
+            customModel: '',
+            providers: [
+              { id: 'google', name: 'Google Gemini', apiKey: '', availableModels: [] }
+            ],
+            activeProviderId: 'google',
+            favoriteModels: [ModelType.FLASH, ModelType.PRO],
+            showFreeOnly: false,
+          };
           return state;
         }
-        return persistedState;
+
+        // Ensure providers exist
+        if (!state.settings.providers || !Array.isArray(state.settings.providers)) {
+          state.settings.providers = [
+            { id: 'google', name: 'Google Gemini', apiKey: state.settings.apiKey || '', availableModels: [] }
+          ];
+          state.settings.activeProviderId = 'google';
+        }
+
+        // Ensure favoriteModels exist
+        if (!state.settings.favoriteModels || !Array.isArray(state.settings.favoriteModels)) {
+          state.settings.favoriteModels = [ModelType.FLASH, ModelType.PRO];
+        }
+
+        // Ensure showFreeOnly exists
+        if (state.settings.showFreeOnly === undefined) {
+          state.settings.showFreeOnly = false;
+        }
+
+        return state;
       },
     }
   )
