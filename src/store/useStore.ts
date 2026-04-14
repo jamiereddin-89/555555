@@ -340,10 +340,15 @@ export const useStore = create<AppState>()(
                 
                 ${MODERN_BEST_PRACTICES}`);
 
+            // Strip provider tag if present
+            const actualModel = typeof model === 'string' && model.includes(':') 
+              ? model.split(':').slice(1).join(':') 
+              : model;
+
             finalResult = await generateOpenAIStream(
               prompt, 
               onChunk, 
-              model as string, 
+              actualModel as string, 
               apiKey || '', 
               activeProvider.baseUrl,
               systemInstruction
@@ -655,20 +660,26 @@ export const useStore = create<AppState>()(
             
             // OpenAI format usually has data array
             models = (data.data || data).map((m: any) => ({
-              name: m.id || m.name,
-              displayName: m.id || m.name
+              name: `${targetProviderId}:${m.id || m.name}`,
+              displayName: m.id || m.name,
+              id: m.id || m.name
             }));
           } else {
             // Use Google Gemini listModels
             try {
-              models = await listModels(apiKey);
+              const geminiModels = await listModels(apiKey);
+              models = geminiModels.map((m: any) => ({
+                ...m,
+                name: `google:${m.name}`,
+                id: m.name
+              }));
             } catch (geminiErr) {
               console.warn("Failed to list Gemini models, using defaults:", geminiErr);
               // Fallback to default Gemini models if listing fails
               models = [
-                { name: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash' },
-                { name: 'gemini-2.0-pro-exp-02-05', displayName: 'Gemini 2.0 Pro' },
-                { name: 'gemini-2.0-flash-lite-preview-02-05', displayName: 'Gemini 2.0 Lite' }
+                { name: 'google:gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', id: 'gemini-2.0-flash' },
+                { name: 'google:gemini-2.0-pro-exp-02-05', displayName: 'Gemini 2.0 Pro', id: 'gemini-2.0-pro-exp-02-05' },
+                { name: 'google:gemini-2.0-flash-lite-preview-02-05', displayName: 'Gemini 2.0 Lite', id: 'gemini-2.0-flash-lite-preview-02-05' }
               ];
             }
           }
@@ -735,7 +746,12 @@ export const useStore = create<AppState>()(
             providers: state.settings.providers.map(p => {
               if (p.id === providerId) {
                 const manualModels = p.manualModels || [];
-                const newModel = { name: modelId, displayName: modelName };
+                const taggedName = `${providerId}:${modelId}`;
+                const newModel = { name: taggedName, displayName: modelName, id: modelId };
+                
+                // Check if already exists
+                if (manualModels.some(m => m.name === taggedName)) return p;
+
                 return { 
                   ...p, 
                   manualModels: [...manualModels, newModel],

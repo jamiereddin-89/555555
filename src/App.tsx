@@ -62,7 +62,8 @@ import {
   TabPanel,
   Badge,
   Select,
-  InputLeftElement
+  InputLeftElement,
+  useBreakpointValue
 } from '@chakra-ui/react';
 import { 
   Sparkles, 
@@ -110,7 +111,10 @@ import {
   ArrowUp,
   FileCode2,
   Star,
-  Edit3
+  Edit3,
+  LogOut,
+  ExternalLink,
+  BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Editor, { OnMount } from '@monaco-editor/react';
@@ -125,13 +129,48 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { collection, addDoc } from 'firebase/firestore';
 
 const PRESET_PROVIDERS = [
-  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
-  { name: 'Pollinations', baseUrl: 'https://gen.pollinations.ai/v1' },
-  { name: 'KiloCode', baseUrl: 'https://api.kilo.ai/api/gateway' },
-  { name: 'OpenCode', baseUrl: 'https://opencode.ai/zen/v1' },
-  { name: 'Puter', baseUrl: 'https://api.puter.com/puterai/openai/v1' },
-  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
-  { name: 'Anthropic', baseUrl: 'https://anthropic.com' },
+  { 
+    name: 'OpenRouter', 
+    baseUrl: 'https://openrouter.ai/api/v1', 
+    apiKeyUrl: 'https://openrouter.ai/workspaces/default/keys',
+    docsUrl: 'https://openrouter.ai/docs'
+  },
+  { 
+    name: 'Pollinations', 
+    baseUrl: 'https://gen.pollinations.ai/v1', 
+    apiKeyUrl: 'https://enter.pollinations.ai/sign-in',
+    docsUrl: 'https://pollinations.ai'
+  },
+  { 
+    name: 'KiloCode', 
+    baseUrl: 'https://api.kilo.ai/api/gateway', 
+    apiKeyUrl: 'https://app.kilo.ai/profile',
+    docsUrl: 'https://kilo.ai'
+  },
+  { 
+    name: 'OpenCode', 
+    baseUrl: 'https://opencode.ai/zen/v1', 
+    apiKeyUrl: 'https://opencode.ai/workspace/wrk_01KE8YNHE01D9HYD496WY3S4ZM/keys',
+    docsUrl: 'https://opencode.ai'
+  },
+  { 
+    name: 'Puter', 
+    baseUrl: 'https://api.puter.com/puterai/openai/v1', 
+    apiKeyUrl: 'https://puter.com/dashboard#account',
+    docsUrl: 'https://puter.com/docs'
+  },
+  { 
+    name: 'OpenAI', 
+    baseUrl: 'https://api.openai.com/v1', 
+    apiKeyUrl: 'https://platform.openai.com/settings/organization/api-keys',
+    docsUrl: 'https://platform.openai.com/docs'
+  },
+  { 
+    name: 'Anthropic', 
+    baseUrl: 'https://anthropic.com', 
+    apiKeyUrl: 'https://platform.claude.com/settings/keys',
+    docsUrl: 'https://docs.anthropic.com'
+  },
 ];
 
 export default function App() {
@@ -203,7 +242,12 @@ export default function App() {
   const [imagePrompt, setImagePrompt] = useState('');
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
-  const [newProvider, setNewProvider] = useState({ name: '', apiKey: '', baseUrl: '' });
+  const [newProvider, setNewProvider] = useState<{ name: string; apiKey: string; baseUrl: string; manualModels: { name: string; displayName: string }[] }>({ 
+    name: '', 
+    apiKey: '', 
+    baseUrl: '', 
+    manualModels: [] 
+  });
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [saveAsName, setSaveAsName] = useState('');
   const [manualModelId, setManualModelId] = useState('');
@@ -212,6 +256,7 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const isMobile = useBreakpointValue({ base: true, lg: false });
   const [showScrollTop, setShowScrollTop] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -265,10 +310,12 @@ export default function App() {
   const resize = useCallback(
     (mouseMoveEvent: MouseEvent) => {
       if (isResizing) {
-        const newWidth = mouseMoveEvent.clientX;
-        if (newWidth > 250 && newWidth < 800) {
-          setSidebarWidth(newWidth);
-        }
+        window.requestAnimationFrame(() => {
+          const newWidth = mouseMoveEvent.clientX;
+          if (newWidth > 250 && newWidth < 800) {
+            setSidebarWidth(newWidth);
+          }
+        });
       }
     },
     [isResizing]
@@ -689,9 +736,10 @@ export default function App() {
     await addProvider({
       name: newProvider.name,
       apiKey: newProvider.apiKey,
-      baseUrl: newProvider.baseUrl
+      baseUrl: newProvider.baseUrl,
+      manualModels: newProvider.manualModels
     });
-    setNewProvider({ name: '', apiKey: '', baseUrl: '' });
+    setNewProvider({ name: '', apiKey: '', baseUrl: '', manualModels: [] });
     setShowAddProvider(false);
     toast({
       title: "Provider Added",
@@ -706,10 +754,11 @@ export default function App() {
     updateProvider(editingProviderId, {
       name: newProvider.name,
       apiKey: newProvider.apiKey,
-      baseUrl: newProvider.baseUrl
+      baseUrl: newProvider.baseUrl,
+      manualModels: newProvider.manualModels
     });
     setEditingProviderId(null);
-    setNewProvider({ name: '', apiKey: '', baseUrl: '' });
+    setNewProvider({ name: '', apiKey: '', baseUrl: '', manualModels: [] });
     toast({
       title: "Provider Updated",
       status: "success",
@@ -722,7 +771,8 @@ export default function App() {
     setNewProvider({
       name: provider.name,
       apiKey: provider.apiKey,
-      baseUrl: provider.baseUrl || ''
+      baseUrl: provider.baseUrl || '',
+      manualModels: provider.manualModels || []
     });
     setShowAddProvider(true);
   };
@@ -860,19 +910,29 @@ export default function App() {
   ];
 
   return (
-    <Flex h="100vh" bg="#0a0a0c" color="slate.200" overflow="hidden" position="relative">
+    <Flex 
+      h="100vh" 
+      bg="#0a0a0c" 
+      color="slate.200" 
+      overflow="hidden" 
+      position="relative"
+      direction={isMobile ? "column" : "row"}
+    >
       {/* Sidebar / Chat Panel */}
       <Box 
-        w={isSidebarMinimized ? "0px" : `${sidebarWidth}px`}
-        minW={isSidebarMinimized ? "0px" : "250px"}
+        w={isMobile ? "full" : (isSidebarMinimized ? "0px" : `${sidebarWidth}px`)}
+        h={isMobile ? "45%" : "full"}
+        minW={isMobile ? "full" : (isSidebarMinimized ? "0px" : "250px")}
         display="flex" 
         flexDirection="column" 
-        borderRight={isSidebarMinimized ? "none" : "1px solid"}
+        borderRight={isMobile ? "none" : (isSidebarMinimized ? "none" : "1px solid")}
+        borderBottom={isMobile ? "1px solid" : "none"}
         borderColor="whiteAlpha.100" 
         bg="#0d0d11"
         position="relative"
         transition={isResizing ? "none" : "width 0.3s ease-in-out"}
         overflow={isSidebarMinimized ? "hidden" : "visible"}
+        zIndex={15}
       >
         <Flex p={4} align="center" justify="space-between" borderBottom="1px solid" borderColor="whiteAlpha.100" minH="65px">
           <Menu>
@@ -911,17 +971,6 @@ export default function App() {
           </Menu>
           
           <HStack spacing={1}>
-            <Tooltip label="Clear Chat & Save Snapshot">
-              <IconButton 
-                aria-label="Clear Chat" 
-                icon={<Trash2 size={16} />} 
-                size="sm" 
-                variant="ghost" 
-                color="whiteAlpha.600"
-                _hover={{ bg: 'red.600', color: 'white' }}
-                onClick={clearChatAndSave}
-              />
-            </Tooltip>
             <Tooltip label="Minimize Sidebar">
               <IconButton
                 aria-label="Minimize"
@@ -936,132 +985,8 @@ export default function App() {
           </HStack>
         </Flex>
 
-        {/* Mode & Model Selector */}
+        {/* Integrated Status Bar */}
         <VStack spacing={0} borderBottom="1px solid" borderColor="whiteAlpha.100">
-          <HStack w="full" px={4} py={2} spacing={2} overflowX="auto" className="no-scrollbar">
-            <Menu>
-              <Tooltip label="Change Generation Mode">
-                <MenuButton
-                  as={IconButton}
-                  aria-label="Mode"
-                  icon={
-                    generationMode === 'website' ? <Globe size={16} /> : 
-                    generationMode === 'component' ? <BoxIcon size={16} /> : 
-                    <Layout size={16} />
-                  }
-                  size="sm"
-                  borderRadius="full"
-                  variant="solid"
-                  colorScheme={
-                    generationMode === 'website' ? "blue" : 
-                    generationMode === 'component' ? "cyan" : 
-                    "pink"
-                  }
-                />
-              </Tooltip>
-              <Portal>
-                <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
-                  <MenuItem icon={<Globe size={14} />} onClick={() => setGenerationMode('website')} bg={generationMode === 'website' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Website Mode</MenuItem>
-                  <MenuItem icon={<BoxIcon size={14} />} onClick={() => setGenerationMode('component')} bg={generationMode === 'component' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Component Mode</MenuItem>
-                  <MenuItem icon={<Layout size={14} />} onClick={onImageOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Generate Image (Imagen)</MenuItem>
-                </MenuList>
-              </Portal>
-            </Menu>
-
-            <Tooltip label="Thinking Mode">
-              <IconButton
-                aria-label="Thinking"
-                icon={<BrainCircuit size={16} />}
-                size="sm"
-                borderRadius="full"
-                variant={isThinking ? 'solid' : 'outline'}
-                colorScheme="purple"
-                onClick={() => { setModel(ModelType.PRO); setIsThinking(true); }}
-              />
-            </Tooltip>
-            
-            <Divider orientation="vertical" h={4} />
-            <VStack align="start" spacing={0}>
-              <Menu size="sm">
-                <MenuButton 
-                  as={Button} 
-                  size="xs" 
-                  variant="ghost" 
-                  rightIcon={<ChevronDown size={10} />}
-                  fontSize="10px"
-                  color="whiteAlpha.700"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                  p={0}
-                  h="auto"
-                >
-                  {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split('/').pop()?.replace('gemini-', '') : model}
-                </MenuButton>
-                <Portal>
-                  <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
-                    <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
-                    {(settings.favoriteModels || []).map((m, i) => {
-                      const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
-                      const displayName = m.split('/').pop();
-                      const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
-                      return (
-                        <MenuItem 
-                          key={`fav-${m}-${i}`} 
-                          fontSize="xs" 
-                          bg="transparent" 
-                          _hover={{ bg: 'whiteAlpha.100' }}
-                          onClick={() => setModel(m)}
-                        >
-                          {fullName}
-                        </MenuItem>
-                      );
-                    })}
-                    <Divider my={1} borderColor="whiteAlpha.100" />
-                    <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
-                    {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
-                      const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
-                      const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
-                      return matchesSearch;
-                    }).map((m, i) => (
-                      <MenuItem 
-                        key={`google-${m}-${i}`} 
-                        fontSize="xs" 
-                        bg="transparent" 
-                        _hover={{ bg: 'whiteAlpha.100' }}
-                        onClick={() => setModel(m)}
-                      >
-                        Google - {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
-                      </MenuItem>
-                    ))}
-                    {allFilteredModels?.map((m, i) => (
-                      <MenuItem 
-                        key={`all-${m.providerId}-${m.name}-${i}`} 
-                        fontSize="xs" 
-                        bg="transparent" 
-                        _hover={{ bg: 'whiteAlpha.100' }}
-                        onClick={() => setModel(m.name)}
-                      >
-                        {m.providerName} - {m.displayName || m.name}
-                      </MenuItem>
-                    ))}
-                    <Divider my={1} borderColor="whiteAlpha.100" />
-                    <MenuItem fontSize="xs" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} onClick={onSettingsOpen}>
-                      Manage Models...
-                    </MenuItem>
-                  </MenuList>
-                </Portal>
-              </Menu>
-              {isThinking && <Text fontSize="8px" color="purple.400" fontWeight="bold">THINKING ENABLED</Text>}
-            </VStack>
-            {currentProjectId && (
-              <HStack spacing={-2} pl={2}>
-                <Tooltip label="Active Collaboration">
-                  <Box w={5} h={5} borderRadius="full" bg="green.500" border="2px solid" borderColor="#16161e" />
-                </Tooltip>
-              </HStack>
-            )}
-          </HStack>
-
-          {/* Integrated Status Bar */}
           <HStack w="full" px={4} py={1.5} spacing={4} bg="whiteAlpha.50" borderBottom="1px solid" borderColor="whiteAlpha.100" fontSize="9px" color="whiteAlpha.400">
             <HStack spacing={2}>
               <Box w={1.2} h={1.2} borderRadius="full" bg={isSaving ? "blue.400" : (isDirty ? "orange.400" : "green.400")} />
@@ -1079,6 +1004,70 @@ export default function App() {
             <Text textTransform="uppercase">{generationMode}</Text>
             <Spacer />
             <Text opacity={0.6}>Powered by {activeProvider?.name || 'AI'}</Text>
+          </HStack>
+          
+          <HStack w="full" px={4} py={2} spacing={2} bg="whiteAlpha.50" borderBottom="1px solid" borderColor="whiteAlpha.100">
+            <HStack spacing={1} bg="whiteAlpha.100" p={1} borderRadius="md">
+              <Tooltip label="Website Mode">
+                <IconButton
+                  aria-label="Website Mode"
+                  icon={<Globe size={14} />}
+                  size="xs"
+                  variant={generationMode === 'website' ? 'solid' : 'ghost'}
+                  colorScheme={generationMode === 'website' ? 'blue' : 'gray'}
+                  onClick={() => setGenerationMode('website')}
+                />
+              </Tooltip>
+              <Tooltip label="Component Mode">
+                <IconButton
+                  aria-label="Component Mode"
+                  icon={<BoxIcon size={14} />}
+                  size="xs"
+                  variant={generationMode === 'component' ? 'solid' : 'ghost'}
+                  colorScheme={generationMode === 'component' ? 'cyan' : 'gray'}
+                  onClick={() => setGenerationMode('component')}
+                />
+              </Tooltip>
+            </HStack>
+            
+            <Divider orientation="vertical" h={4} />
+            
+            <Tooltip label="Generate Image">
+              <IconButton
+                aria-label="Generate Image"
+                icon={<Layout size={14} />}
+                size="xs"
+                variant="ghost"
+                onClick={onImageOpen}
+                color="whiteAlpha.600"
+                _hover={{ color: 'white', bg: 'whiteAlpha.100' }}
+              />
+            </Tooltip>
+            
+            <Tooltip label="Thinking Mode">
+              <IconButton
+                aria-label="Thinking"
+                icon={<BrainCircuit size={14} />}
+                size="xs"
+                variant={isThinking ? 'solid' : 'ghost'}
+                colorScheme="purple"
+                onClick={() => setIsThinking(!isThinking)}
+              />
+            </Tooltip>
+
+            <Spacer />
+
+            <Tooltip label="Clear Chat & Save Snapshot">
+              <IconButton 
+                aria-label="Clear Chat" 
+                icon={<Trash2 size={14} />} 
+                size="xs" 
+                variant="ghost" 
+                color="whiteAlpha.600"
+                _hover={{ bg: 'red.600', color: 'white' }}
+                onClick={clearChatAndSave}
+              />
+            </Tooltip>
           </HStack>
           
           {generationMode === 'component' && (
@@ -1127,6 +1116,79 @@ export default function App() {
         {/* Chat History */}
         <Box flex={1} position="relative" display="flex" flexDirection="column" overflow="hidden">
           <Box px={4} py={2} borderBottom="1px solid" borderColor="whiteAlpha.100" display="flex" alignItems="center" gap={2}>
+            <Menu size="sm">
+              <MenuButton 
+                as={Button} 
+                size="xs" 
+                variant="ghost" 
+                rightIcon={<ChevronDown size={10} />}
+                fontSize="10px"
+                color="whiteAlpha.700"
+                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                p={1}
+                h="auto"
+                maxW="120px"
+                overflow="hidden"
+                textOverflow="ellipsis"
+                whiteSpace="nowrap"
+              >
+                {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split(':').pop()?.replace('gemini-', '') : model}
+              </MenuButton>
+              <Portal>
+                <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
+                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
+                  {(settings.favoriteModels || []).map((m, i) => {
+                    const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
+                    const displayName = m.split(':').pop();
+                    const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
+                    return (
+                      <MenuItem 
+                        key={`fav-${m}-${i}`} 
+                        fontSize="xs" 
+                        bg="transparent" 
+                        _hover={{ bg: 'whiteAlpha.100' }}
+                        onClick={() => setModel(m)}
+                      >
+                        {fullName}
+                      </MenuItem>
+                    );
+                  })}
+                  <Divider my={1} borderColor="whiteAlpha.100" />
+                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
+                  {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
+                    const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
+                    const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
+                    return matchesSearch;
+                  }).map((m, i) => (
+                    <MenuItem 
+                      key={`google-${m}-${i}`} 
+                      fontSize="xs" 
+                      bg="transparent" 
+                      _hover={{ bg: 'whiteAlpha.100' }}
+                      onClick={() => setModel(`google:${m}`)}
+                    >
+                      Google - {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
+                    </MenuItem>
+                  ))}
+                  {allFilteredModels?.map((m, i) => (
+                    <MenuItem 
+                      key={`all-${m.providerId}-${m.name}-${i}`} 
+                      fontSize="xs" 
+                      bg="transparent" 
+                      _hover={{ bg: 'whiteAlpha.100' }}
+                      onClick={() => setModel(m.name)}
+                    >
+                      {m.providerName} - {m.displayName || m.name.split(':').pop()}
+                    </MenuItem>
+                  ))}
+                  <Divider my={1} borderColor="whiteAlpha.100" />
+                  <MenuItem fontSize="xs" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} onClick={onSettingsOpen}>
+                    Manage Models...
+                  </MenuItem>
+                </MenuList>
+              </Portal>
+            </Menu>
+
             <InputGroup size="xs" flex={1}>
               <InputLeftElement pointerEvents="none">
                 <Search size={12} color="gray" />
@@ -1320,7 +1382,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Input Area */}
-        <Box p={4} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#0d0d11">
+        <Box p={isMobile ? 2 : 4} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#0d0d11">
           <Box position="relative">
             <Textarea
               value={userInput}
@@ -1328,7 +1390,9 @@ export default function App() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  handleSend();
+                  if (userInput.trim() && !isLoading) {
+                    handleSend();
+                  }
                 }
               }}
               placeholder={html ? "Ask for changes..." : (generationMode === 'website' ? "Describe your site..." : "Describe your component...")}
@@ -1341,7 +1405,7 @@ export default function App() {
               fontSize="xs"
               _focus={{ borderColor: 'blue.500', ring: 1, ringColor: 'blue.500/50' }}
               resize="none"
-              h="100px"
+              h={isMobile ? "60px" : "100px"}
               isDisabled={isLoading}
             />
             <IconButton
@@ -1352,7 +1416,11 @@ export default function App() {
               bottom={2}
               colorScheme="blue"
               size="sm"
-              onClick={handleSend}
+              onClick={() => {
+                if (userInput.trim() && !isLoading) {
+                  handleSend();
+                }
+              }}
               isDisabled={isLoading || !userInput.trim()}
             />
           </Box>
@@ -1360,15 +1428,17 @@ export default function App() {
             <Text fontSize="10px" color="whiteAlpha.400">
               Token usage: ~{Math.round(html.length / 4)} tokens
             </Text>
-            <Text fontSize="10px" color="whiteAlpha.400" textAlign="center">
-              Press Enter to send. Shift+Enter for new line.
-            </Text>
+            {!isMobile && (
+              <Text fontSize="10px" color="whiteAlpha.400" textAlign="center">
+                Press Enter to send. Shift+Enter for new line.
+              </Text>
+            )}
           </Flex>
         </Box>
       </Box>
 
       {/* Resize Handle */}
-      {!isSidebarMinimized && (
+      {!isSidebarMinimized && !isMobile && (
         <Box
           w="4px"
           cursor="col-resize"
@@ -1399,87 +1469,74 @@ export default function App() {
       )}
 
       {/* Main Preview Panel */}
-      <Flex flex={1} direction="column" bg="#050507">
+      <Flex flex={1} direction="column" bg="#050507" w="full" h={isMobile ? "55%" : "full"}>
         <Flex h={14} borderBottom="1px solid" borderColor="whiteAlpha.100" align="center" justify="space-between" px={4} bg="#0d0d11">
           <HStack spacing={4}>
-            <HStack bg="whiteAlpha.50" p={1} borderRadius="lg">
-              <Tooltip label="Preview">
-                <IconButton
-                  size="xs"
-                  variant={activeTab === 'preview' ? 'solid' : 'ghost'}
-                  bg={activeTab === 'preview' ? 'whiteAlpha.200' : 'transparent'}
+            <HStack spacing={1} bg="whiteAlpha.50" p={1} borderRadius="lg">
+              <Tooltip label="Preview Tab">
+                <IconButton 
+                  size="sm" 
+                  variant={activeTab === 'preview' ? 'solid' : 'ghost'} 
+                  colorScheme={activeTab === 'preview' ? 'blue' : 'gray'}
                   onClick={() => setActiveTab('preview')}
-                  icon={<Eye size={14} />}
-                  aria-label="Switch to Preview tab"
+                  icon={<Eye size={16} />}
+                  aria-label="Preview"
                 />
               </Tooltip>
-              <Tooltip label="Code">
-                <IconButton
-                  size="xs"
-                  variant={activeTab === 'code' ? 'solid' : 'ghost'}
-                  bg={activeTab === 'code' ? 'whiteAlpha.200' : 'transparent'}
+              <Tooltip label="Code Tab">
+                <IconButton 
+                  size="sm" 
+                  variant={activeTab === 'code' ? 'solid' : 'ghost'} 
+                  colorScheme={activeTab === 'code' ? 'blue' : 'gray'}
                   onClick={() => setActiveTab('code')}
-                  icon={<Code size={14} />}
-                  aria-label="Switch to Code tab"
+                  icon={<Code size={16} />}
+                  aria-label="Code"
                 />
               </Tooltip>
-            </HStack>
-
-            <Tooltip label="Projects">
+              <Divider orientation="vertical" h={4} mx={1} />
               <Menu>
-                <MenuButton
-                  as={IconButton}
-                  aria-label="Projects"
-                  icon={<FolderOpen size={14} />}
-                  variant="solid"
-                  size="xs"
-                  bg="whiteAlpha.100"
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
-                />
+                <Tooltip label="Project Management">
+                  <MenuButton
+                    as={IconButton}
+                    aria-label="Projects"
+                    icon={<FolderOpen size={16} />}
+                    variant="ghost"
+                    size="sm"
+                    color="whiteAlpha.600"
+                    _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                  />
+                </Tooltip>
                 <Portal>
                   <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
-                    <MenuItem icon={<Save size={14} />} onClick={onSaveOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save Current</MenuItem>
-                    <MenuItem icon={<SaveAll size={14} />} onClick={onSaveAsOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save As...</MenuItem>
+                    <MenuItem icon={<Save size={14} />} onClick={() => saveProject(projectName || 'New Project')} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save Current</MenuItem>
+                    <MenuItem icon={<Copy size={14} />} onClick={onSaveAsOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save As...</MenuItem>
                     <MenuItem icon={<FolderOpen size={14} />} onClick={onLoadOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Load Project</MenuItem>
-                    <Divider my={2} borderColor="whiteAlpha.100" />
-                    <MenuItem icon={<RotateCcw size={14} />} onClick={clearChat} color="red.400" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Clear All</MenuItem>
+                    <Divider my={1} borderColor="whiteAlpha.100" />
+                    <MenuItem icon={<Trash2 size={14} />} onClick={clearChat} color="red.400" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Clear All</MenuItem>
                   </MenuList>
                 </Portal>
               </Menu>
-            </Tooltip>
+            </HStack>
 
-            <Tooltip label="Load Project">
-              <IconButton
-                aria-label="Load Project"
-                icon={<FolderOpen size={14} />}
-                variant="ghost"
-                size="xs"
-                onClick={onLoadOpen}
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
-
-            <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
+            <HStack spacing={1}>
               <Tooltip label="Undo">
-                <IconButton aria-label="Undo" icon={<Undo2 size={16} />} size="xs" variant="ghost" isDisabled={historyIndex <= 0 || isLoading} onClick={undo} />
+                <IconButton aria-label="Undo" icon={<Undo2 size={16} />} size="sm" variant="ghost" isDisabled={historyIndex <= 0} onClick={undo} color="whiteAlpha.600" _hover={{ bg: 'whiteAlpha.100', color: 'white' }} />
               </Tooltip>
               <Tooltip label="Redo">
-                <IconButton aria-label="Redo" icon={<Redo2 size={16} />} size="xs" variant="ghost" isDisabled={historyIndex >= undoHistory.length - 1 || isLoading} onClick={redo} />
+                <IconButton aria-label="Redo" icon={<Redo2 size={16} />} size="sm" variant="ghost" isDisabled={historyIndex >= undoHistory.length - 1} onClick={redo} color="whiteAlpha.600" _hover={{ bg: 'whiteAlpha.100', color: 'white' }} />
               </Tooltip>
               <Tooltip label="Reload Preview">
-                <IconButton aria-label="Reload" icon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleReloadPreview} />
+                <IconButton aria-label="Reload" icon={<RefreshCw size={16} />} size="sm" variant="ghost" onClick={() => setHtml(html)} color="whiteAlpha.600" _hover={{ bg: 'whiteAlpha.100', color: 'white' }} />
               </Tooltip>
             </HStack>
 
             {activeTab === 'preview' && (
-              <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
-                <Menu>
+              <HStack spacing={1} bg="whiteAlpha.50" p={1} borderRadius="lg">
+                <Menu size="xs">
                   <Tooltip label="Responsive View">
                     <MenuButton
                       as={IconButton}
-                      aria-label="Responsive View"
+                      aria-label="View Mode"
                       icon={
                         previewMode === 'desktop' ? <Monitor size={14} /> : 
                         previewMode === 'tablet' ? <Tablet size={14} /> : 
@@ -1502,89 +1559,100 @@ export default function App() {
             )}
           </HStack>
 
-          <HStack spacing={2}>
-            {activeTab === 'code' && (
-              <Tooltip label="Refactor Code">
-                <Button
-                  size="sm"
-                  leftIcon={<RefreshCw size={14} />}
-                  onClick={handleRefactor}
-                  isDisabled={!html || isLoading}
-                  variant="outline"
-                  borderColor="whiteAlpha.200"
-                  fontSize="xs"
-                  colorScheme="cyan"
-                  aria-label="Refactor generated code"
-                >
-                  Refactor
-                </Button>
-              </Tooltip>
-            )}
-            
-            <Tooltip label="Export Options">
-              <Menu>
-                <MenuButton
-                  as={IconButton}
-                  aria-label="Export"
-                  icon={<Download size={16} />}
-                  variant="outline"
-                  size="sm"
-                  borderColor="whiteAlpha.200"
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                  isDisabled={!html}
-                />
-                <Portal>
-                  <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
-                    <MenuItem icon={<Globe size={14} />} onClick={copyToClipboard} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Copy HTML</MenuItem>
-                    <MenuItem icon={<FileCode2 size={14} />} onClick={handleExportHtml} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export HTML</MenuItem>
-                    <MenuItem icon={<FileJson size={14} />} onClick={handleExportZip} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export ZIP</MenuItem>
-                  </MenuList>
-                </Portal>
-              </Menu>
-            </Tooltip>
-
-            <Divider orientation="vertical" h={6} borderColor="whiteAlpha.200" mx={1} />
-
-            <HStack spacing={1}>
-              {!user ? (
-                <Button 
-                  size="xs" 
-                  colorScheme="blue" 
-                  onClick={handleLogin}
-                  aria-label="Login with Google"
-                >
-                  Login
-                </Button>
-              ) : (
-                <Tooltip label={user.displayName || 'User'}>
-                  <Box w={6} h={6} borderRadius="full" overflow="hidden" border="1px solid" borderColor="whiteAlpha.300">
-                    <img src={user.photoURL || ''} alt="User" referrerPolicy="no-referrer" />
-                  </Box>
+          <HStack spacing={4}>
+            <HStack spacing={2}>
+              {activeTab === 'code' && (
+                <Tooltip label="Refactor Code">
+                  <Button
+                    size="sm"
+                    leftIcon={<RefreshCw size={14} />}
+                    onClick={handleRefactor}
+                    isDisabled={!html || isLoading}
+                    variant="outline"
+                    borderColor="whiteAlpha.200"
+                    fontSize="xs"
+                    colorScheme="cyan"
+                    aria-label="Refactor generated code"
+                  >
+                    Refactor
+                  </Button>
                 </Tooltip>
               )}
-              <Tooltip label="Versions">
-                <IconButton
-                  aria-label="Versions"
-                  icon={<History size={16} />}
-                  variant="ghost"
-                  size="sm"
-                  onClick={onVersionsOpen}
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                />
+              
+              <Tooltip label="Export Options">
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    aria-label="Export"
+                    icon={<Download size={16} />}
+                    variant="outline"
+                    size="sm"
+                    borderColor="whiteAlpha.200"
+                    color="whiteAlpha.600"
+                    _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                    isDisabled={!html}
+                  />
+                  <Portal>
+                    <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                      <MenuItem icon={<Globe size={14} />} onClick={copyToClipboard} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Copy HTML</MenuItem>
+                      <MenuItem icon={<FileCode2 size={14} />} onClick={handleExportHtml} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export HTML</MenuItem>
+                      <MenuItem icon={<FileJson size={14} />} onClick={handleExportZip} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export ZIP</MenuItem>
+                    </MenuList>
+                  </Portal>
+                </Menu>
               </Tooltip>
-              <Tooltip label="Settings">
-                <IconButton
-                  aria-label="Settings"
-                  icon={<Settings size={16} />}
-                  variant="ghost"
-                  size="sm"
-                  onClick={onSettingsOpen}
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                />
-              </Tooltip>
+
+              <Divider orientation="vertical" h={6} borderColor="whiteAlpha.200" mx={1} />
+
+              <HStack spacing={1}>
+                {!user ? (
+                  <Button 
+                    size="xs" 
+                    colorScheme="blue" 
+                    onClick={handleLogin}
+                    aria-label="Login with Google"
+                  >
+                    Login
+                  </Button>
+                ) : (
+                  <Menu>
+                    <MenuButton>
+                      <Tooltip label={user.displayName || 'User'}>
+                        <Box w={6} h={6} borderRadius="full" overflow="hidden" border="1px solid" borderColor="whiteAlpha.300">
+                          <img src={user.photoURL || ''} alt="User" referrerPolicy="no-referrer" />
+                        </Box>
+                      </Tooltip>
+                    </MenuButton>
+                    <Portal>
+                      <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                        <MenuItem icon={<LogOut size={14} />} onClick={() => auth.signOut()} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Logout</MenuItem>
+                      </MenuList>
+                    </Portal>
+                  </Menu>
+                )}
+                <Tooltip label="Versions">
+                  <IconButton
+                    aria-label="Versions"
+                    icon={<History size={16} />}
+                    variant="ghost"
+                    size="sm"
+                    onClick={onVersionsOpen}
+                    color="whiteAlpha.600"
+                    _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                  />
+                </Tooltip>
+                <Tooltip label="Settings">
+                  <IconButton
+                    aria-label="Settings"
+                    icon={<Settings size={16} />}
+                    variant="ghost"
+                    size="sm"
+                    onClick={onSettingsOpen}
+                    color="whiteAlpha.600"
+                    _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                  />
+                </Tooltip>
+              </HStack>
             </HStack>
           </HStack>
         </Flex>
@@ -1976,11 +2044,17 @@ export default function App() {
                         />
                       </InputGroup>
                       <Menu size="xs">
-                        <Tooltip label="Preset Providers">
-                          <MenuButton as={IconButton} icon={<Plus size={12} />} size="xs" variant="outline" />
-                        </Tooltip>
+                        <MenuButton 
+                          as={Button} 
+                          leftIcon={<Plus size={12} />} 
+                          size="xs" 
+                          colorScheme="blue"
+                        >
+                          Provider
+                        </MenuButton>
                         <Portal>
                           <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000}>
+                            <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Preset Providers</Text>
                             {PRESET_PROVIDERS.map(p => (
                               <MenuItem 
                                 key={p.name} 
@@ -1995,51 +2069,142 @@ export default function App() {
                                 {p.name}
                               </MenuItem>
                             ))}
+                            <Divider my={1} borderColor="whiteAlpha.100" />
+                            <MenuItem 
+                              fontSize="xs" 
+                              bg="transparent" 
+                              _hover={{ bg: 'whiteAlpha.100' }}
+                              onClick={() => {
+                                setNewProvider({ name: '', apiKey: '', baseUrl: '', manualModels: [] });
+                                setShowAddProvider(true);
+                              }}
+                              icon={<Plus size={12} />}
+                            >
+                              Custom Provider
+                            </MenuItem>
                           </MenuList>
                         </Portal>
                       </Menu>
-                      <Button 
-                        size="xs" 
-                        leftIcon={showAddProvider ? <Minus size={12} /> : <Plus size={12} />} 
-                        onClick={() => setShowAddProvider(!showAddProvider)}
-                        colorScheme={showAddProvider ? 'gray' : 'blue'}
-                      >
-                        {showAddProvider ? 'Cancel' : 'Add Custom'}
-                      </Button>
                     </HStack>
 
                     <AnimatePresence>
                       {showAddProvider && (
                         <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          style={{ overflow: 'hidden' }}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
                         >
-                          <VStack spacing={3} p={3} bg="blackAlpha.300" borderRadius="lg" mb={2}>
-                            <Input 
-                              size="sm" 
-                              placeholder="Provider Name (e.g. Anthropic)" 
-                              value={newProvider.name}
-                              onChange={(e) => setNewProvider({ ...newProvider, name: e.target.value })}
-                            />
-                            <Input 
-                              size="sm" 
-                              placeholder="API Key" 
-                              type="password"
-                              value={newProvider.apiKey}
-                              onChange={(e) => setNewProvider({ ...newProvider, apiKey: e.target.value })}
-                            />
-                            <Input 
-                              size="sm" 
-                              placeholder="Base URL (e.g. https://api.anthropic.com/v1)" 
-                              value={newProvider.baseUrl}
-                              onChange={(e) => setNewProvider({ ...newProvider, baseUrl: e.target.value })}
-                            />
-                            <Button size="sm" w="full" colorScheme="blue" onClick={editingProviderId ? handleUpdateProvider : handleAddProvider}>
-                              {editingProviderId ? 'Update Provider' : 'Add Provider'}
-                            </Button>
-                          </VStack>
+                          <Box p={3} bg="whiteAlpha.50" borderRadius="lg" border="1px solid" borderColor="blue.500" mb={4}>
+                            <VStack spacing={3} align="stretch">
+                              <HStack justify="space-between">
+                                <Text fontSize="xs" fontWeight="bold">Add New Provider</Text>
+                                <HStack spacing={2}>
+                                  {PRESET_PROVIDERS.find(p => p.name === newProvider.name)?.apiKeyUrl && (
+                                    <Button 
+                                      size="xs" 
+                                      variant="outline" 
+                                      fontSize="9px" 
+                                      onClick={() => window.open(PRESET_PROVIDERS.find(p => p.name === newProvider.name)?.apiKeyUrl, '_blank')}
+                                      leftIcon={<ExternalLink size={10} />}
+                                    >
+                                      Get API Key
+                                    </Button>
+                                  )}
+                                  {PRESET_PROVIDERS.find(p => p.name === newProvider.name)?.docsUrl && (
+                                    <Button 
+                                      size="xs" 
+                                      variant="ghost" 
+                                      fontSize="9px" 
+                                      onClick={() => window.open(PRESET_PROVIDERS.find(p => p.name === newProvider.name)?.docsUrl, '_blank')}
+                                      leftIcon={<BookOpen size={10} />}
+                                    >
+                                      Docs
+                                    </Button>
+                                  )}
+                                </HStack>
+                              </HStack>
+                              <Input 
+                                placeholder="Provider Name (e.g. OpenRouter)" 
+                                size="xs" 
+                                value={newProvider.name}
+                                onChange={(e) => setNewProvider({ ...newProvider, name: e.target.value })}
+                              />
+                              <Input 
+                                placeholder="API Key" 
+                                size="xs" 
+                                type="password"
+                                value={newProvider.apiKey}
+                                onChange={(e) => setNewProvider({ ...newProvider, apiKey: e.target.value })}
+                              />
+                              <Input 
+                                placeholder="Base URL (e.g. https://openrouter.ai/api/v1)" 
+                                size="xs" 
+                                value={newProvider.baseUrl}
+                                onChange={(e) => setNewProvider({ ...newProvider, baseUrl: e.target.value })}
+                              />
+                              
+                              <Divider borderColor="whiteAlpha.100" />
+                              <Text fontSize="10px" fontWeight="bold" color="whiteAlpha.400">MANUAL MODELS (OPTIONAL)</Text>
+                              <HStack>
+                                <Input 
+                                  placeholder="Model ID" 
+                                  size="xs" 
+                                  value={manualModelId}
+                                  onChange={(e) => setManualModelId(e.target.value)}
+                                />
+                                <Input 
+                                  placeholder="Display Name" 
+                                  size="xs" 
+                                  value={manualModelName}
+                                  onChange={(e) => setManualModelName(e.target.value)}
+                                />
+                                <IconButton 
+                                  aria-label="Add Model" 
+                                  icon={<Plus size={12} />} 
+                                  size="xs" 
+                                  onClick={() => {
+                                    if (manualModelId && manualModelName) {
+                                      setNewProvider({
+                                        ...newProvider,
+                                        manualModels: [...(newProvider.manualModels || []), { name: manualModelId, displayName: manualModelName }]
+                                      });
+                                      setManualModelId('');
+                                      setManualModelName('');
+                                    }
+                                  }}
+                                />
+                              </HStack>
+                              {newProvider.manualModels?.length > 0 && (
+                                <HStack spacing={1} flexWrap="wrap">
+                                  {newProvider.manualModels.map((m, i) => (
+                                    <Badge key={i} colorScheme="blue" fontSize="8px" display="flex" alignItems="center">
+                                      {m.displayName}
+                                      <Box as="span" ml={1} cursor="pointer" onClick={() => {
+                                        const updated = [...newProvider.manualModels];
+                                        updated.splice(i, 1);
+                                        setNewProvider({ ...newProvider, manualModels: updated });
+                                      }}>×</Box>
+                                    </Badge>
+                                  ))}
+                                </HStack>
+                              )}
+
+                              <Button 
+                                size="xs" 
+                                colorScheme="blue" 
+                                onClick={() => {
+                                  if (newProvider.name && newProvider.apiKey && newProvider.baseUrl) {
+                                    addProvider(newProvider);
+                                    setNewProvider({ name: '', apiKey: '', baseUrl: '', manualModels: [] });
+                                    setShowAddProvider(false);
+                                    toast({ title: "Provider added", status: "success", duration: 2000 });
+                                  }
+                                }}
+                              >
+                                Add Provider
+                              </Button>
+                            </VStack>
+                          </Box>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -2286,13 +2451,41 @@ export default function App() {
         </ModalContent>
       </Modal>
 
-      {/* Provider Detail Modal */}
-      <Modal isOpen={isProviderDetailOpen} onClose={onProviderDetailClose}>
+      {/* Provider Details Modal */}
+      <Modal isOpen={isProviderDetailOpen} onClose={onProviderDetailClose} size="md">
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent bg="#1a1a24" color="white" borderColor="whiteAlpha.200" border="1px solid">
-          <ModalHeader fontSize="md">Provider Details</ModalHeader>
+          <ModalHeader fontSize="md">
+            <HStack justify="space-between" pr={8}>
+              <Text>{selectedProvider?.name} Details</Text>
+              <HStack spacing={2}>
+                {PRESET_PROVIDERS.find(p => p.name === selectedProvider?.name)?.apiKeyUrl && (
+                  <Button 
+                    size="xs" 
+                    variant="outline" 
+                    fontSize="9px" 
+                    onClick={() => window.open(PRESET_PROVIDERS.find(p => p.name === selectedProvider?.name)?.apiKeyUrl, '_blank')}
+                    leftIcon={<ExternalLink size={10} />}
+                  >
+                    Get API Key
+                  </Button>
+                )}
+                {PRESET_PROVIDERS.find(p => p.name === selectedProvider?.name)?.docsUrl && (
+                  <Button 
+                    size="xs" 
+                    variant="ghost" 
+                    fontSize="9px" 
+                    onClick={() => window.open(PRESET_PROVIDERS.find(p => p.name === selectedProvider?.name)?.docsUrl, '_blank')}
+                    leftIcon={<BookOpen size={10} />}
+                  >
+                    Docs
+                  </Button>
+                )}
+              </HStack>
+            </HStack>
+          </ModalHeader>
           <ModalCloseButton />
-          <ModalBody pb={6}>
+          <ModalBody>
             {selectedProvider && (
               <VStack align="stretch" spacing={4}>
                 <Box p={4} bg="whiteAlpha.50" borderRadius="xl">
@@ -2308,9 +2501,62 @@ export default function App() {
                   <Divider my={3} borderColor="whiteAlpha.100" />
                   <VStack align="start" spacing={1}>
                     <Text fontSize="xs" color="whiteAlpha.500">API Key</Text>
-                    <Text fontSize="sm">{selectedProvider.apiKey ? '••••••••••••••••' : 'Not configured'}</Text>
+                    <HStack w="full">
+                      <Input 
+                        size="xs" 
+                        type="password" 
+                        value={selectedProvider.apiKey} 
+                        isReadOnly 
+                        bg="blackAlpha.300"
+                      />
+                      <IconButton 
+                        aria-label="Edit Key" 
+                        icon={<Edit3 size={12} />} 
+                        size="xs" 
+                        onClick={() => {
+                          const newKey = prompt("Enter new API Key:", selectedProvider.apiKey);
+                          if (newKey !== null) {
+                            updateProvider(selectedProvider.id, { apiKey: newKey });
+                            toast({ title: "API Key updated", status: "success", duration: 2000 });
+                          }
+                        }}
+                      />
+                    </HStack>
                   </VStack>
                 </Box>
+
+                <Divider borderColor="whiteAlpha.100" />
+                
+                <VStack align="start" spacing={2}>
+                  <Text fontSize="xs" fontWeight="bold" color="whiteAlpha.600">Add Manual Model</Text>
+                  <HStack w="full">
+                    <Input 
+                      placeholder="Model ID" 
+                      size="xs" 
+                      value={manualModelId}
+                      onChange={(e) => setManualModelId(e.target.value)}
+                    />
+                    <Input 
+                      placeholder="Display Name" 
+                      size="xs" 
+                      value={manualModelName}
+                      onChange={(e) => setManualModelName(e.target.value)}
+                    />
+                    <IconButton 
+                      aria-label="Add Model" 
+                      icon={<Plus size={12} />} 
+                      size="xs" 
+                      onClick={() => {
+                        if (manualModelId && manualModelName) {
+                          addManualModel(selectedProvider.id, manualModelId, manualModelName);
+                          setManualModelId('');
+                          setManualModelName('');
+                          toast({ title: "Model added", status: "success", duration: 2000 });
+                        }
+                      }}
+                    />
+                  </HStack>
+                </VStack>
 
                 <VStack align="start" spacing={2}>
                   <Text fontSize="xs" fontWeight="bold" color="whiteAlpha.600">Available Models ({selectedProvider.availableModels?.length || 0})</Text>
@@ -2318,9 +2564,14 @@ export default function App() {
                     {selectedProvider.availableModels?.length > 0 ? (
                       <VStack align="stretch" spacing={1}>
                         {selectedProvider.availableModels.map((m, i) => (
-                          <Text key={`${m.name}-${i}`} fontSize="xs" p={1} _hover={{ bg: 'whiteAlpha.100' }} borderRadius="sm">
-                            {m.displayName || m.name}
-                          </Text>
+                          <HStack key={`${m.name}-${i}`} justify="space-between" p={1} _hover={{ bg: 'whiteAlpha.100' }} borderRadius="sm">
+                            <Text fontSize="xs">
+                              {m.displayName || m.name.split(':').pop()}
+                            </Text>
+                            {m.name.startsWith(selectedProvider.id) && (
+                              <Badge colorScheme="blue" fontSize="8px">Manual</Badge>
+                            )}
+                          </HStack>
                         ))}
                       </VStack>
                     ) : (
@@ -2403,34 +2654,32 @@ export default function App() {
       <Modal isOpen={isWhatsNewOpen} onClose={onWhatsNewClose} size="lg">
         <ModalOverlay backdropFilter="blur(4px)" />
         <ModalContent bg="#1a1a24" color="white" borderColor="whiteAlpha.200" border="1px solid">
-          <ModalHeader fontSize="md">What's New in Version 2.2</ModalHeader>
+          <ModalHeader fontSize="md">What's New in Version 2.3</ModalHeader>
           <ModalCloseButton />
           <ModalBody maxH="500px" overflowY="auto" pb={6}>
             <VStack align="stretch" spacing={6}>
               <Box>
                 <HStack justify="space-between" mb={2}>
-                  <Badge colorScheme="blue">v2.2</Badge>
+                  <Badge colorScheme="blue">v2.3</Badge>
                   <Text fontSize="xs" color="whiteAlpha.400">April 14, 2026</Text>
                 </HStack>
                 <VStack align="start" spacing={2} pl={2} borderLeft="2px solid" borderColor="blue.500">
-                  <Text fontSize="xs">• Added Chat Clear/Snapshot feature to reset context safely.</Text>
-                  <Text fontSize="xs">• Enhanced Chat Bubbles with timestamps and action buttons (Resend, Copy, Edit, Delete).</Text>
-                  <Text fontSize="xs">• Improved AI Provider management with intelligent model-to-provider routing.</Text>
-                  <Text fontSize="xs">• Added Editor Copy button for quick code extraction.</Text>
-                  <Text fontSize="xs">• Fixed Preset Providers pop-up visibility issues.</Text>
-                  <Text fontSize="xs">• Updated model dropdown to show all available models from all providers.</Text>
+                  <Text fontSize="xs">• Unified Provider Management: Single "+ Provider" button for all AI providers.</Text>
+                  <Text fontSize="xs">• Manual Model Tagging: Models are now tied to their specific provider to avoid confusion.</Text>
+                  <Text fontSize="xs">• Quick Access: Added "Get API Key" and "Docs" links for all preset providers.</Text>
+                  <Text fontSize="xs">• UI Refinement: Moved mode toggles and model selection for better workflow.</Text>
+                  <Text fontSize="xs">• Icon-only Tabs: Reverted Preview and Code tabs to icon-only for a cleaner look.</Text>
                 </VStack>
               </Box>
               <Box>
                 <HStack justify="space-between" mb={2}>
-                  <Badge colorScheme="gray">v2.0</Badge>
-                  <Text fontSize="xs" color="whiteAlpha.400">April 13, 2026</Text>
+                  <Badge colorScheme="gray">v2.2</Badge>
+                  <Text fontSize="xs" color="whiteAlpha.400">April 14, 2026</Text>
                 </HStack>
                 <VStack align="start" spacing={2} pl={2} borderLeft="2px solid" borderColor="whiteAlpha.200">
-                  <Text fontSize="xs">• Initial release with multi-provider support (OpenRouter, Pollinations, etc.).</Text>
-                  <Text fontSize="xs">• Advanced Project management system with local & cloud sync.</Text>
-                  <Text fontSize="xs">• Real-time preview with device simulation (Mobile, Tablet, Desktop).</Text>
-                  <Text fontSize="xs">• AI-powered refactoring and semantic HTML optimization.</Text>
+                  <Text fontSize="xs">• Added Chat Clear/Snapshot feature to reset context safely.</Text>
+                  <Text fontSize="xs">• Enhanced Chat Bubbles with timestamps and action buttons.</Text>
+                  <Text fontSize="xs">• Improved AI Provider management with intelligent routing.</Text>
                 </VStack>
               </Box>
             </VStack>

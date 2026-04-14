@@ -36,6 +36,10 @@ export async function generateSiteStream(
   apiKey?: string
 ) {
   const client = getClient(apiKey);
+  const actualModel = typeof modelType === 'string' && modelType.includes(':') 
+    ? modelType.split(':').slice(1).join(':') 
+    : modelType;
+
   const systemInstruction = `You are an expert front-end web developer. 
 You ALWAYS return a single complete, valid HTML5 document with inline CSS (Tailwind via CDN is preferred) and vanilla JavaScript.
 NEVER use markdown code fences. NEVER explain your code. 
@@ -45,7 +49,7 @@ Ensure the design is modern, responsive, and accessible.
 ${MODERN_BEST_PRACTICES}`;
 
   const result = await client.models.generateContentStream({
-    model: modelType,
+    model: actualModel,
     contents: `Generate a full website based on this description: ${prompt}`,
     config: {
       systemInstruction,
@@ -77,6 +81,10 @@ export async function updateSiteStream(
   apiKey?: string
 ) {
   const client = getClient(apiKey);
+  const actualModel = typeof modelType === 'string' && modelType.includes(':') 
+    ? modelType.split(':').slice(1).join(':') 
+    : modelType;
+
   const systemInstruction = `You are an expert front-end refactoring assistant.
 The user will provide a full HTML document and a change request.
 You MUST return the ENTIRE updated HTML document.
@@ -96,7 +104,7 @@ ${instruction}
 Return the full updated HTML:`;
 
   const result = await client.models.generateContentStream({
-    model: modelType,
+    model: actualModel,
     contents: prompt,
     config: {
       systemInstruction,
@@ -125,6 +133,10 @@ export async function generateComponentStream(
   apiKey?: string
 ) {
   const client = getClient(apiKey);
+  const actualModel = typeof modelType === 'string' && modelType.includes(':') 
+    ? modelType.split(':').slice(1).join(':') 
+    : modelType;
+
   const systemInstruction = `You are an expert front-end component developer.
 Generate a specific UI component (e.g., a button, card, form, navigation bar) based on the description.
 The output should be a standalone HTML snippet with necessary CSS (Tailwind via CDN) and JS.
@@ -135,7 +147,7 @@ Ensure the component is modular, accessible, and follows modern best practices.
 ${MODERN_BEST_PRACTICES}`;
 
   const result = await client.models.generateContentStream({
-    model: modelType,
+    model: actualModel,
     contents: `Generate a UI component based on this description: ${prompt}`,
     config: {
       systemInstruction,

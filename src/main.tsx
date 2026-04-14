@@ -8,15 +8,22 @@ import './index.css';
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args: any[]) => {
-    if (typeof args[0] === 'string' && args[0].includes('ResizeObserver loop completed with undelivered notifications')) {
+    const message = args[0]?.message || args[0];
+    if (typeof message === 'string' && (
+      message.includes('ResizeObserver loop completed with undelivered notifications') ||
+      message.includes('ResizeObserver loop limit exceeded')
+    )) {
       return;
     }
     originalError.apply(console, args);
   };
 
   window.addEventListener('error', (e) => {
-    if (e.message === 'ResizeObserver loop completed with undelivered notifications' ||
-        e.message === 'ResizeObserver loop limit exceeded') {
+    const message = e.message || '';
+    if (typeof message === 'string' && (
+      message.includes('ResizeObserver loop completed with undelivered notifications') ||
+      message.includes('ResizeObserver loop limit exceeded')
+    )) {
       const resizeObserverErrDiv = document.getElementById('webpack-dev-server-client-overlay-div');
       if (resizeObserverErrDiv) {
         resizeObserverErrDiv.style.display = 'none';
