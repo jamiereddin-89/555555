@@ -286,7 +286,7 @@ export const useStore = create<AppState>()(
           }
         }
 
-        const apiKey = activeProvider?.apiKey || settings.apiKey || (typeof import !== 'undefined' && (import.meta as any)?.env?.VITE_GEMINI_API_KEY) || undefined;
+        const apiKey = activeProvider?.apiKey || settings.apiKey || (import.meta as any)?.env?.VITE_GEMINI_API_KEY || undefined;
 
         // Add initial model message for streaming
         const modelMsg: ChatMessage = { 
