@@ -910,17 +910,30 @@ export default function App() {
             </Portal>
           </Menu>
           
-          <Tooltip label="Clear Chat & Save Snapshot">
-            <IconButton 
-              aria-label="Clear Chat" 
-              icon={<Trash2 size={16} />} 
-              size="sm" 
-              variant="ghost" 
-              color="whiteAlpha.600"
-              _hover={{ bg: 'red.600', color: 'white' }}
-              onClick={clearChatAndSave}
-            />
-          </Tooltip>
+          <HStack spacing={1}>
+            <Tooltip label="Clear Chat & Save Snapshot">
+              <IconButton 
+                aria-label="Clear Chat" 
+                icon={<Trash2 size={16} />} 
+                size="sm" 
+                variant="ghost" 
+                color="whiteAlpha.600"
+                _hover={{ bg: 'red.600', color: 'white' }}
+                onClick={clearChatAndSave}
+              />
+            </Tooltip>
+            <Tooltip label="Minimize Sidebar">
+              <IconButton
+                aria-label="Minimize"
+                icon={<PanelLeftClose size={16} />}
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSidebarMinimized(true)}
+                color="whiteAlpha.600"
+                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+              />
+            </Tooltip>
+          </HStack>
         </Flex>
 
         {/* Mode & Model Selector */}
@@ -1538,17 +1551,6 @@ export default function App() {
                   </Box>
                 </Tooltip>
               )}
-              <Tooltip label="Minimize Sidebar">
-                <IconButton
-                  aria-label="Minimize"
-                  icon={<PanelLeftClose size={16} />}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsSidebarMinimized(true)}
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                />
-              </Tooltip>
               <Tooltip label="Versions">
                 <IconButton
                   aria-label="Versions"
