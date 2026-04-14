@@ -43,6 +43,7 @@ export interface AIProvider {
   apiKey: string;
   baseUrl?: string;
   availableModels: any[];
+  manualModels?: { name: string; displayName: string }[];
 }
 
 export interface AppSettings {
@@ -91,7 +92,9 @@ interface AppState {
   settings: AppSettings;
   availableModels: any[];
   providerSearchQuery: string;
+  modelSearchQuery: string;
   setProviderSearchQuery: (query: string) => void;
+  setModelSearchQuery: (query: string) => void;
 
   // Actions
   setHtml: (html: string) => void;
@@ -120,6 +123,7 @@ interface AppState {
   
   // Project & Version Actions
   saveProject: (name: string, isAutoSave?: boolean) => Promise<void>;
+  saveProjectAs: (name: string) => Promise<void>;
   loadProject: (id: string) => void;
   copyProject: (id: string) => void;
   deleteProject: (id: string) => void;
@@ -132,6 +136,7 @@ interface AppState {
   addProvider: (provider: Omit<AIProvider, 'id' | 'availableModels'>) => Promise<void>;
   updateProvider: (id: string, provider: Partial<AIProvider>) => void;
   removeProvider: (id: string) => void;
+  addManualModel: (providerId: string, modelId: string, modelName: string) => void;
   toggleFavoriteModel: (modelId: string) => void;
   
   // Firebase Sync
@@ -165,7 +170,9 @@ export const useStore = create<AppState>()(
       versions: [],
       searchQuery: '',
       providerSearchQuery: '',
+      modelSearchQuery: '',
       setProviderSearchQuery: (providerSearchQuery) => set({ providerSearchQuery }),
+      setModelSearchQuery: (modelSearchQuery) => set({ modelSearchQuery }),
       availableModels: [],
       settings: {
         theme: 'vs-dark',
@@ -460,6 +467,41 @@ export const useStore = create<AppState>()(
         });
       },
 
+      saveProjectAs: async (name) => {
+        const { html, messages, savedProjects, generationMode, versions } = get();
+        
+        set({ isSaving: true });
+        const id = Math.random().toString(36).substring(7);
+          
+        const newProject: Project = {
+          id,
+          name,
+          html,
+          messages,
+          timestamp: Date.now(),
+          mode: generationMode,
+          versions,
+          isAutoSave: false
+        };
+
+        // Sync to Firestore if logged in
+        if (auth.currentUser) {
+          const projectRef = doc(db, 'projects', id);
+          await setDoc(projectRef, {
+            ...newProject,
+            ownerId: auth.currentUser.uid,
+            collaborators: []
+          }, { merge: true });
+        }
+
+        set({ 
+          savedProjects: [...savedProjects, newProject], 
+          currentProjectId: id,
+          lastSavedHtml: html,
+          isSaving: false
+        });
+      },
+
       loadProject: (id) => {
         const { savedProjects } = get();
         const project = savedProjects.find(p => p.id === id);
@@ -656,6 +698,26 @@ export const useStore = create<AppState>()(
             providers: state.settings.providers.map(p => 
               p.id === id ? { ...p, ...providerData } : p
             )
+          }
+        }));
+      },
+
+      addManualModel: (providerId, modelId, modelName) => {
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            providers: state.settings.providers.map(p => {
+              if (p.id === providerId) {
+                const manualModels = p.manualModels || [];
+                const newModel = { name: modelId, displayName: modelName };
+                return { 
+                  ...p, 
+                  manualModels: [...manualModels, newModel],
+                  availableModels: [...p.availableModels, newModel]
+                };
+              }
+              return p;
+            })
           }
         }));
       },

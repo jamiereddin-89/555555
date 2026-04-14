@@ -124,6 +124,16 @@ import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { collection, addDoc } from 'firebase/firestore';
 
+const PRESET_PROVIDERS = [
+  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+  { name: 'Pollinations', baseUrl: 'https://gen.pollinations.ai/v1' },
+  { name: 'KiloCode', baseUrl: 'https://api.kilo.ai/api/gateway' },
+  { name: 'OpenCode', baseUrl: 'https://opencode.ai/zen/v1' },
+  { name: 'Puter', baseUrl: 'https://api.puter.com/puterai/openai/v1' },
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+  { name: 'Anthropic', baseUrl: 'https://anthropic.com' },
+];
+
 export default function App() {
   const {
     html,
@@ -156,6 +166,7 @@ export default function App() {
     undo,
     redo,
     saveProject,
+    saveProjectAs,
     loadProject,
     deleteProject,
     setGenerationMode,
@@ -174,6 +185,9 @@ export default function App() {
     updateProvider,
     removeProvider,
     toggleFavoriteModel,
+    addManualModel,
+    modelSearchQuery,
+    setModelSearchQuery,
     lastSavedHtml,
     lastAutoSaveTime,
     isSaving,
@@ -190,6 +204,9 @@ export default function App() {
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
   const [newProvider, setNewProvider] = useState({ name: '', apiKey: '', baseUrl: '' });
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [saveAsName, setSaveAsName] = useState('');
+  const [manualModelId, setManualModelId] = useState('');
+  const [manualModelName, setManualModelName] = useState('');
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
@@ -203,6 +220,7 @@ export default function App() {
   const isDirty = html !== lastSavedHtml;
   
   const { isOpen: isSaveOpen, onOpen: onSaveOpen, onClose: onSaveClose } = useDisclosure();
+  const { isOpen: isSaveAsOpen, onOpen: onSaveAsOpen, onClose: onSaveAsClose } = useDisclosure();
   const { isOpen: isLoadOpen, onOpen: onLoadOpen, onClose: onLoadClose } = useDisclosure();
   const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
   const { isOpen: isVersionsOpen, onOpen: onVersionsOpen, onClose: onVersionsClose } = useDisclosure();
@@ -762,6 +780,30 @@ export default function App() {
     });
   };
 
+  const handleSaveAs = () => {
+    if (!saveAsName.trim()) return;
+    saveProjectAs(saveAsName);
+    onSaveAsClose();
+    toast({
+      title: "Project saved as new copy.",
+      status: "success",
+      duration: 2000,
+      position: 'top'
+    });
+  };
+
+  const handleAddManualModel = (providerId: string) => {
+    if (!manualModelId.trim() || !manualModelName.trim()) return;
+    addManualModel(providerId, manualModelId, manualModelName);
+    setManualModelId('');
+    setManualModelName('');
+    toast({
+      title: "Model added manually",
+      status: "success",
+      duration: 2000,
+    });
+  };
+
   const getIframeWidth = () => {
     switch (previewMode) {
       case 'mobile': return '375px';
@@ -776,6 +818,36 @@ export default function App() {
 
   const activeProvider = (settings.providers || []).find(p => p.id === settings.activeProviderId);
   const currentAvailableModels = activeProvider?.availableModels || [];
+
+  const isFreeModel = (m: any) => {
+    const name = (m.displayName || m.name || '').toLowerCase();
+    return name.includes('free') || m.inputTokenPrice === 0 || m.outputTokenPrice === 0;
+  };
+
+  const filteredModels = currentAvailableModels.filter(m => {
+    const matchesSearch = (m.displayName || m.name || '').toLowerCase().includes(modelSearchQuery.toLowerCase());
+    const matchesFree = !settings.showFreeOnly || isFreeModel(m);
+    return matchesSearch && matchesFree;
+  });
+
+  const EXAMPLE_CATEGORIES = [
+    {
+      name: 'Layouts & Pages',
+      examples: [
+        { name: 'Landing Page', prompt: 'Generate a modern landing page for a SaaS product with hero, features, and pricing.', icon: <Layout size={14} /> },
+        { name: 'Dashboard', prompt: 'Generate a clean admin dashboard with sidebar, stats cards, and a data table.', icon: <BoxIcon size={14} /> },
+        { name: 'Portfolio', prompt: 'Generate a creative portfolio for a designer with project grid and contact form.', icon: <Globe size={14} /> },
+      ]
+    },
+    {
+      name: 'Components',
+      examples: [
+        { name: 'Navbar', prompt: 'Generate a responsive navigation bar with logo, links, and a call-to-action button.', icon: <Layout size={14} /> },
+        { name: 'Pricing Table', prompt: 'Generate a responsive pricing table with three tiers and hover effects.', icon: <Zap size={14} /> },
+        { name: 'Contact Form', prompt: 'Generate a modern contact form with validation and success state.', icon: <Send size={14} /> },
+      ]
+    }
+  ];
 
   return (
     <Flex h="100vh" bg="#0a0a0c" color="slate.200" overflow="hidden" position="relative">
@@ -1155,20 +1227,30 @@ export default function App() {
               <Portal>
                 <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
                   <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
-                  {(settings.favoriteModels || []).map(m => (
-                    <MenuItem 
-                      key={m} 
-                      fontSize="xs" 
-                      bg="transparent" 
-                      _hover={{ bg: 'whiteAlpha.100' }}
-                      onClick={() => setModel(m)}
-                    >
-                      {m.split('/').pop()}
-                    </MenuItem>
-                  ))}
+                  {(settings.favoriteModels || []).map(m => {
+                    const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
+                    const displayName = m.split('/').pop();
+                    const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
+                    return (
+                      <MenuItem 
+                        key={m} 
+                        fontSize="xs" 
+                        bg="transparent" 
+                        _hover={{ bg: 'whiteAlpha.100' }}
+                        onClick={() => setModel(m)}
+                      >
+                        {fullName}
+                      </MenuItem>
+                    );
+                  })}
                   <Divider my={1} borderColor="whiteAlpha.100" />
                   <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
-                  {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].map(m => (
+                  {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
+                    const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
+                    const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
+                    const matchesFree = !settings.showFreeOnly || true; // Gemini models are usually free in this context or we don't have price info
+                    return matchesSearch && matchesFree;
+                  }).map(m => (
                     <MenuItem 
                       key={m} 
                       fontSize="xs" 
@@ -1179,7 +1261,7 @@ export default function App() {
                       {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
                     </MenuItem>
                   ))}
-                  {currentAvailableModels?.map(m => (
+                  {filteredModels?.map(m => (
                     <MenuItem 
                       key={m.name} 
                       fontSize="xs" 
@@ -1187,7 +1269,7 @@ export default function App() {
                       _hover={{ bg: 'whiteAlpha.100' }}
                       onClick={() => setModel(m.name)}
                     >
-                      {m.displayName || m.name}
+                      {activeProvider?.name} - {m.displayName || m.name}
                     </MenuItem>
                   ))}
                   <Divider my={1} borderColor="whiteAlpha.100" />
@@ -1316,6 +1398,7 @@ export default function App() {
                 <Portal>
                   <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
                     <MenuItem icon={<Save size={14} />} onClick={onSaveOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save Current</MenuItem>
+                    <MenuItem icon={<SaveAll size={14} />} onClick={onSaveAsOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save As...</MenuItem>
                     <MenuItem icon={<FolderOpen size={14} />} onClick={onLoadOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Load Project</MenuItem>
                     <Divider my={2} borderColor="whiteAlpha.100" />
                     <MenuItem icon={<RotateCcw size={14} />} onClick={clearChat} color="red.400" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Clear All</MenuItem>
@@ -1366,19 +1449,22 @@ export default function App() {
           </HStack>
 
           <HStack spacing={2}>
-            <Button
-              size="sm"
-              leftIcon={<RefreshCw size={14} />}
-              onClick={handleRefactor}
-              isDisabled={!html || isLoading}
-              variant="outline"
-              borderColor="whiteAlpha.200"
-              fontSize="xs"
-              colorScheme="cyan"
-              aria-label="Refactor generated code"
-            >
-              Refactor
-            </Button>
+            <Tooltip label="Refactor Code">
+              <Button
+                size="sm"
+                leftIcon={<RefreshCw size={14} />}
+                onClick={handleRefactor}
+                isDisabled={!html || isLoading}
+                variant="outline"
+                borderColor="whiteAlpha.200"
+                fontSize="xs"
+                colorScheme="cyan"
+                aria-label="Refactor generated code"
+              >
+                Refactor
+              </Button>
+            </Tooltip>
+            
             <Tooltip label="Export Options">
               <Menu>
                 <MenuButton
@@ -1400,6 +1486,18 @@ export default function App() {
                   </MenuList>
                 </Portal>
               </Menu>
+            </Tooltip>
+
+            <Tooltip label="Settings">
+              <IconButton
+                aria-label="Settings"
+                icon={<Settings size={14} />}
+                onClick={onSettingsOpen}
+                size="sm"
+                variant="ghost"
+                color="whiteAlpha.600"
+                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+              />
             </Tooltip>
           </HStack>
         </Flex>
@@ -1644,6 +1742,32 @@ export default function App() {
         </ModalContent>
       </Modal>
 
+      {/* Save Project As Modal */}
+      <Modal isOpen={isSaveAsOpen} onClose={onSaveAsClose}>
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent bg="#1a1a24" color="white" borderColor="whiteAlpha.200" border="1px solid">
+          <ModalHeader fontSize="md">Save Project As</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4}>
+              <Text fontSize="xs" color="whiteAlpha.600">Enter a new name for this project copy.</Text>
+              <Input 
+                placeholder="New Project Name" 
+                value={saveAsName} 
+                onChange={(e) => setSaveAsName(e.target.value)}
+                bg="whiteAlpha.50"
+                borderColor="whiteAlpha.200"
+                fontSize="sm"
+              />
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" variant="ghost" mr={3} onClick={onSaveAsClose}>Cancel</Button>
+            <Button size="sm" colorScheme="blue" onClick={handleSaveAs} isDisabled={!saveAsName.trim()}>Save Copy</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* Load Project Modal */}
       <Modal isOpen={isLoadOpen} onClose={onLoadClose} size="xl">
         <ModalOverlay backdropFilter="blur(4px)" />
@@ -1726,13 +1850,36 @@ export default function App() {
                           borderColor="whiteAlpha.100"
                         />
                       </InputGroup>
+                      <Menu size="xs">
+                        <Tooltip label="Preset Providers">
+                          <MenuButton as={IconButton} icon={<Plus size={12} />} size="xs" variant="outline" />
+                        </Tooltip>
+                        <Portal>
+                          <MenuList bg="#1a1a24" borderColor="whiteAlpha.200">
+                            {PRESET_PROVIDERS.map(p => (
+                              <MenuItem 
+                                key={p.name} 
+                                fontSize="xs" 
+                                bg="transparent" 
+                                _hover={{ bg: 'whiteAlpha.100' }}
+                                onClick={() => {
+                                  setNewProvider({ ...newProvider, name: p.name, baseUrl: p.baseUrl });
+                                  setShowAddProvider(true);
+                                }}
+                              >
+                                {p.name}
+                              </MenuItem>
+                            ))}
+                          </MenuList>
+                        </Portal>
+                      </Menu>
                       <Button 
                         size="xs" 
                         leftIcon={showAddProvider ? <Minus size={12} /> : <Plus size={12} />} 
                         onClick={() => setShowAddProvider(!showAddProvider)}
                         colorScheme={showAddProvider ? 'gray' : 'blue'}
                       >
-                        {showAddProvider ? 'Cancel' : 'Add'}
+                        {showAddProvider ? 'Cancel' : 'Add Custom'}
                       </Button>
                     </HStack>
 
@@ -1853,7 +2000,7 @@ export default function App() {
                               <option value={ModelType.LITE} style={{ background: '#1a1a24' }}>Gemini 2.0 Lite</option>
                             </>
                           )}
-                          {currentAvailableModels?.map(m => (
+                          {filteredModels?.map(m => (
                             <option key={m.name} value={m.name} style={{ background: '#1a1a24' }}>{m.displayName || m.name}</option>
                           ))}
                         </Select>
@@ -1871,8 +2018,20 @@ export default function App() {
 
                     <Box p={3} bg="whiteAlpha.50" borderRadius="lg">
                       <Text fontSize="xs" fontWeight="bold" mb={2} color="whiteAlpha.700">Favorite Models</Text>
+                      <InputGroup size="xs" mb={2}>
+                        <InputLeftElement pointerEvents="none">
+                          <Search size={10} color="gray" />
+                        </InputLeftElement>
+                        <Input 
+                          placeholder="Search models..." 
+                          value={modelSearchQuery}
+                          onChange={(e) => setModelSearchQuery(e.target.value)}
+                          bg="whiteAlpha.50"
+                          borderColor="whiteAlpha.100"
+                        />
+                      </InputGroup>
                       <VStack align="stretch" spacing={2} maxH="150px" overflowY="auto" className="no-scrollbar">
-                        {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].map(m => (
+                        {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase().includes(modelSearchQuery.toLowerCase())).map(m => (
                           <HStack key={m} justify="space-between" p={1}>
                             <Text fontSize="xs">{m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}</Text>
                             <IconButton 
@@ -1884,7 +2043,7 @@ export default function App() {
                             />
                           </HStack>
                         ))}
-                        {currentAvailableModels?.map(m => (
+                        {filteredModels?.map(m => (
                           <HStack key={m.name} justify="space-between" p={1}>
                             <Text fontSize="xs">{m.displayName || m.name}</Text>
                             <IconButton 
@@ -1896,6 +2055,33 @@ export default function App() {
                             />
                           </HStack>
                         ))}
+                      </VStack>
+                    </Box>
+
+                    <Box p={3} bg="whiteAlpha.50" borderRadius="lg">
+                      <Text fontSize="xs" fontWeight="bold" mb={2} color="whiteAlpha.700">Add Model Manually</Text>
+                      <VStack spacing={2}>
+                        <Input 
+                          size="xs" 
+                          placeholder="Model ID (e.g. gpt-4o)" 
+                          value={manualModelId}
+                          onChange={(e) => setManualModelId(e.target.value)}
+                        />
+                        <Input 
+                          size="xs" 
+                          placeholder="Display Name (e.g. GPT-4o)" 
+                          value={manualModelName}
+                          onChange={(e) => setManualModelName(e.target.value)}
+                        />
+                        <Button 
+                          size="xs" 
+                          w="full" 
+                          colorScheme="teal" 
+                          onClick={() => handleAddManualModel(settings.activeProviderId)}
+                          isDisabled={!manualModelId || !manualModelName}
+                        >
+                          Add Model to Current Provider
+                        </Button>
                       </VStack>
                     </Box>
 
