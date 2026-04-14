@@ -2075,8 +2075,8 @@ export default function App() {
                               <option value={ModelType.LITE} style={{ background: '#1a1a24' }}>Gemini 2.0 Lite</option>
                             </>
                           )}
-                          {filteredModels?.map(m => (
-                            <option key={m.name} value={m.name} style={{ background: '#1a1a24' }}>{m.displayName || m.name}</option>
+                          {filteredModels?.map((m, i) => (
+                            <option key={`${m.name}-${i}`} value={m.name} style={{ background: '#1a1a24' }}>{m.displayName || m.name}</option>
                           ))}
                         </Select>
                         <Tooltip label="Fetch/Refresh Models">
@@ -2267,8 +2267,8 @@ export default function App() {
                   <Box w="full" maxH="200px" overflowY="auto" bg="blackAlpha.300" borderRadius="lg" p={2} className="no-scrollbar">
                     {selectedProvider.availableModels?.length > 0 ? (
                       <VStack align="stretch" spacing={1}>
-                        {selectedProvider.availableModels.map(m => (
-                          <Text key={m.name} fontSize="xs" p={1} _hover={{ bg: 'whiteAlpha.100' }} borderRadius="sm">
+                        {selectedProvider.availableModels.map((m, i) => (
+                          <Text key={`${m.name}-${i}`} fontSize="xs" p={1} _hover={{ bg: 'whiteAlpha.100' }} borderRadius="sm">
                             {m.displayName || m.name}
                           </Text>
                         ))}
