@@ -875,73 +875,52 @@ export default function App() {
         overflow={isSidebarMinimized ? "hidden" : "visible"}
       >
         <Flex p={4} align="center" justify="space-between" borderBottom="1px solid" borderColor="whiteAlpha.100" minH="65px">
-          <HStack spacing={3}>
-            <Box 
-              w={8} h={8} 
-              borderRadius="lg" 
-              bgGradient="linear(to-br, blue.500, purple.600)" 
-              display="flex" 
-              alignItems="center" 
-              justifyContent="center" 
-              boxShadow="0 0 15px rgba(66, 153, 225, 0.3)"
+          <Menu>
+            <MenuButton
+              as={Box}
+              cursor="pointer"
+              _hover={{ opacity: 0.8 }}
+              transition="opacity 0.2s"
             >
-              <Sparkles size={18} color="white" />
-            </Box>
-            <VStack align="start" spacing={0}>
-              <Text fontSize="sm" fontWeight="bold">AI Gen</Text>
-            </VStack>
-          </HStack>
-          <HStack spacing={1}>
-            {!user ? (
-              <Button 
-                size="xs" 
-                colorScheme="blue" 
-                onClick={handleLogin}
-                aria-label="Login with Google"
-              >
-                Login
-              </Button>
-            ) : (
-              <Tooltip label={user.displayName || 'User'}>
-                <Box w={6} h={6} borderRadius="full" overflow="hidden">
-                  <img src={user.photoURL || ''} alt="User" />
+              <HStack spacing={3}>
+                <Box 
+                  w={8} h={8} 
+                  borderRadius="lg" 
+                  bgGradient="linear(to-br, blue.500, purple.600)" 
+                  display="flex" 
+                  alignItems="center" 
+                  justifyContent="center" 
+                  boxShadow="0 0 15px rgba(66, 153, 225, 0.3)"
+                >
+                  <Sparkles size={18} color="white" />
                 </Box>
-              </Tooltip>
-            )}
-            <Tooltip label="Minimize Sidebar">
-              <IconButton
-                aria-label="Minimize"
-                icon={<PanelLeftClose size={16} />}
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsSidebarMinimized(true)}
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
-            <Tooltip label="Versions">
-              <IconButton
-                aria-label="Versions"
-                icon={<History size={16} />}
-                variant="ghost"
-                size="sm"
-                onClick={onVersionsOpen}
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
-            <Tooltip label="Settings">
-              <IconButton
-                aria-label="Settings"
-                icon={<Settings size={16} />}
-                variant="ghost"
-                size="sm"
-                onClick={onSettingsOpen}
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
-          </HStack>
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="sm" fontWeight="bold">AI Gen</Text>
+                </VStack>
+              </HStack>
+            </MenuButton>
+            <Portal>
+              <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                <Text px={3} py={2} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Example Prompts</Text>
+                <MenuItem bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} fontSize="xs" onClick={() => executeAiAction("Generate a modern landing page for a coffee shop with a hero section, menu, and contact form.")}>Coffee Shop Landing Page</MenuItem>
+                <MenuItem bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} fontSize="xs" onClick={() => executeAiAction("Create a professional portfolio website for a photographer with a gallery grid.")}>Photographer Portfolio</MenuItem>
+                <MenuItem bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} fontSize="xs" onClick={() => executeAiAction("Build a SaaS dashboard with sidebar navigation and data charts.")}>SaaS Dashboard</MenuItem>
+                <MenuItem bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} fontSize="xs" onClick={() => executeAiAction("Design a clean and minimal blog template with a reading list.")}>Minimal Blog Template</MenuItem>
+              </MenuList>
+            </Portal>
+          </Menu>
+          
+          <Tooltip label="Clear Chat & Save Snapshot">
+            <IconButton 
+              aria-label="Clear Chat" 
+              icon={<Trash2 size={16} />} 
+              size="sm" 
+              variant="ghost" 
+              color="whiteAlpha.600"
+              _hover={{ bg: 'red.600', color: 'white' }}
+              onClick={clearChatAndSave}
+            />
+          </Tooltip>
         </Flex>
 
         {/* Mode & Model Selector */}
@@ -990,9 +969,74 @@ export default function App() {
             
             <Divider orientation="vertical" h={4} />
             <VStack align="start" spacing={0}>
-              <Text fontSize="10px" color="whiteAlpha.500" fontWeight="bold">
-                {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split('/').pop()?.replace('gemini-', '') : model}
-              </Text>
+              <Menu size="sm">
+                <MenuButton 
+                  as={Button} 
+                  size="xs" 
+                  variant="ghost" 
+                  rightIcon={<ChevronDown size={10} />}
+                  fontSize="10px"
+                  color="whiteAlpha.700"
+                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                  p={0}
+                  h="auto"
+                >
+                  {settings.activeProviderId.toUpperCase()}: {typeof model === 'string' ? model.split('/').pop()?.replace('gemini-', '') : model}
+                </MenuButton>
+                <Portal>
+                  <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
+                    <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
+                    {(settings.favoriteModels || []).map((m, i) => {
+                      const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
+                      const displayName = m.split('/').pop();
+                      const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
+                      return (
+                        <MenuItem 
+                          key={`fav-${m}-${i}`} 
+                          fontSize="xs" 
+                          bg="transparent" 
+                          _hover={{ bg: 'whiteAlpha.100' }}
+                          onClick={() => setModel(m)}
+                        >
+                          {fullName}
+                        </MenuItem>
+                      );
+                    })}
+                    <Divider my={1} borderColor="whiteAlpha.100" />
+                    <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
+                    {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
+                      const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
+                      const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
+                      return matchesSearch;
+                    }).map((m, i) => (
+                      <MenuItem 
+                        key={`google-${m}-${i}`} 
+                        fontSize="xs" 
+                        bg="transparent" 
+                        _hover={{ bg: 'whiteAlpha.100' }}
+                        onClick={() => setModel(m)}
+                      >
+                        Google - {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
+                      </MenuItem>
+                    ))}
+                    {allFilteredModels?.map((m, i) => (
+                      <MenuItem 
+                        key={`all-${m.providerId}-${m.name}-${i}`} 
+                        fontSize="xs" 
+                        bg="transparent" 
+                        _hover={{ bg: 'whiteAlpha.100' }}
+                        onClick={() => setModel(m.name)}
+                      >
+                        {m.providerName} - {m.displayName || m.name}
+                      </MenuItem>
+                    ))}
+                    <Divider my={1} borderColor="whiteAlpha.100" />
+                    <MenuItem fontSize="xs" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} onClick={onSettingsOpen}>
+                      Manage Models...
+                    </MenuItem>
+                  </MenuList>
+                </Portal>
+              </Menu>
               {isThinking && <Text fontSize="8px" color="purple.400" fontWeight="bold">THINKING ENABLED</Text>}
             </VStack>
             {currentProjectId && (
@@ -1083,17 +1127,6 @@ export default function App() {
                 onChange={(e) => setChatSearchQuery(e.target.value)}
               />
             </InputGroup>
-            <Tooltip label="Clear Chat & Save Snapshot">
-              <IconButton 
-                aria-label="Clear Chat" 
-                icon={<Trash2 size={14} />} 
-                size="xs" 
-                variant="ghost" 
-                color="whiteAlpha.600"
-                _hover={{ bg: 'red.600', color: 'white' }}
-                onClick={clearChatAndSave}
-              />
-            </Tooltip>
           </Box>
           
           <Box 
@@ -1275,75 +1308,6 @@ export default function App() {
 
         {/* Input Area */}
         <Box p={4} borderTop="1px solid" borderColor="whiteAlpha.100" bg="#0d0d11">
-          <HStack mb={2} spacing={2}>
-            <Menu size="sm">
-              <MenuButton 
-                as={Button} 
-                size="xs" 
-                variant="outline" 
-                rightIcon={<ChevronDown size={12} />}
-                fontSize="10px"
-                bg="whiteAlpha.50"
-                borderColor="whiteAlpha.200"
-                _hover={{ bg: 'whiteAlpha.100' }}
-              >
-                {typeof model === 'string' ? model.split('/').pop() : model}
-              </MenuButton>
-              <Portal>
-                <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
-                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
-                  {(settings.favoriteModels || []).map((m, i) => {
-                    const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
-                    const displayName = m.split('/').pop();
-                    const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
-                    return (
-                      <MenuItem 
-                        key={`fav-${m}-${i}`} 
-                        fontSize="xs" 
-                        bg="transparent" 
-                        _hover={{ bg: 'whiteAlpha.100' }}
-                        onClick={() => setModel(m)}
-                      >
-                        {fullName}
-                      </MenuItem>
-                    );
-                  })}
-                  <Divider my={1} borderColor="whiteAlpha.100" />
-                  <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">All Models</Text>
-                  {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
-                    const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
-                    const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
-                    return matchesSearch;
-                  }).map((m, i) => (
-                    <MenuItem 
-                      key={`google-${m}-${i}`} 
-                      fontSize="xs" 
-                      bg="transparent" 
-                      _hover={{ bg: 'whiteAlpha.100' }}
-                      onClick={() => setModel(m)}
-                    >
-                      Google - {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
-                    </MenuItem>
-                  ))}
-                  {allFilteredModels?.map((m, i) => (
-                    <MenuItem 
-                      key={`all-${m.providerId}-${m.name}-${i}`} 
-                      fontSize="xs" 
-                      bg="transparent" 
-                      _hover={{ bg: 'whiteAlpha.100' }}
-                      onClick={() => setModel(m.name)}
-                    >
-                      {m.providerName} - {m.displayName || m.name}
-                    </MenuItem>
-                  ))}
-                  <Divider my={1} borderColor="whiteAlpha.100" />
-                  <MenuItem fontSize="xs" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }} onClick={onSettingsOpen}>
-                    Manage Models...
-                  </MenuItem>
-                </MenuList>
-              </Portal>
-            </Menu>
-          </HStack>
           <Box position="relative">
             <Textarea
               value={userInput}
@@ -1454,10 +1418,11 @@ export default function App() {
                   as={IconButton}
                   aria-label="Projects"
                   icon={<FolderOpen size={14} />}
-                  variant="ghost"
+                  variant="solid"
                   size="xs"
+                  bg="whiteAlpha.100"
                   color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                  _hover={{ bg: 'whiteAlpha.200', color: 'white' }}
                 />
                 <Portal>
                   <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
@@ -1513,21 +1478,23 @@ export default function App() {
           </HStack>
 
           <HStack spacing={2}>
-            <Tooltip label="Refactor Code">
-              <Button
-                size="sm"
-                leftIcon={<RefreshCw size={14} />}
-                onClick={handleRefactor}
-                isDisabled={!html || isLoading}
-                variant="outline"
-                borderColor="whiteAlpha.200"
-                fontSize="xs"
-                colorScheme="cyan"
-                aria-label="Refactor generated code"
-              >
-                Refactor
-              </Button>
-            </Tooltip>
+            {activeTab === 'code' && (
+              <Tooltip label="Refactor Code">
+                <Button
+                  size="sm"
+                  leftIcon={<RefreshCw size={14} />}
+                  onClick={handleRefactor}
+                  isDisabled={!html || isLoading}
+                  variant="outline"
+                  borderColor="whiteAlpha.200"
+                  fontSize="xs"
+                  colorScheme="cyan"
+                  aria-label="Refactor generated code"
+                >
+                  Refactor
+                </Button>
+              </Tooltip>
+            )}
             
             <Tooltip label="Export Options">
               <Menu>
@@ -1552,17 +1519,59 @@ export default function App() {
               </Menu>
             </Tooltip>
 
-            <Tooltip label="Settings">
-              <IconButton
-                aria-label="Settings"
-                icon={<Settings size={14} />}
-                onClick={onSettingsOpen}
-                size="sm"
-                variant="ghost"
-                color="whiteAlpha.600"
-                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-              />
-            </Tooltip>
+            <Divider orientation="vertical" h={6} borderColor="whiteAlpha.200" mx={1} />
+
+            <HStack spacing={1}>
+              {!user ? (
+                <Button 
+                  size="xs" 
+                  colorScheme="blue" 
+                  onClick={handleLogin}
+                  aria-label="Login with Google"
+                >
+                  Login
+                </Button>
+              ) : (
+                <Tooltip label={user.displayName || 'User'}>
+                  <Box w={6} h={6} borderRadius="full" overflow="hidden" border="1px solid" borderColor="whiteAlpha.300">
+                    <img src={user.photoURL || ''} alt="User" referrerPolicy="no-referrer" />
+                  </Box>
+                </Tooltip>
+              )}
+              <Tooltip label="Minimize Sidebar">
+                <IconButton
+                  aria-label="Minimize"
+                  icon={<PanelLeftClose size={16} />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsSidebarMinimized(true)}
+                  color="whiteAlpha.600"
+                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                />
+              </Tooltip>
+              <Tooltip label="Versions">
+                <IconButton
+                  aria-label="Versions"
+                  icon={<History size={16} />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={onVersionsOpen}
+                  color="whiteAlpha.600"
+                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                />
+              </Tooltip>
+              <Tooltip label="Settings">
+                <IconButton
+                  aria-label="Settings"
+                  icon={<Settings size={16} />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={onSettingsOpen}
+                  color="whiteAlpha.600"
+                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                />
+              </Tooltip>
+            </HStack>
           </HStack>
         </Flex>
 
@@ -2386,7 +2395,7 @@ export default function App() {
         left={0}
         zIndex={10}
       >
-        <HStack justify="space-between">
+        <HStack justify="center" spacing={4}>
           <HStack spacing={1}>
             <Text fontSize="10px" color="whiteAlpha.500">Created By</Text>
             <Text 
@@ -2401,19 +2410,17 @@ export default function App() {
               Jamie Reddin
             </Text>
           </HStack>
-          <HStack spacing={2}>
-            <Text fontSize="10px" color="whiteAlpha.400">|</Text>
-            <Text 
-              as="button" 
-              onClick={onWhatsNewOpen}
-              fontSize="10px" 
-              fontWeight="bold" 
-              color="whiteAlpha.600"
-              _hover={{ color: 'white' }}
-            >
-              Version 2.2
-            </Text>
-          </HStack>
+          <Text fontSize="10px" color="whiteAlpha.400">|</Text>
+          <Text 
+            as="button" 
+            onClick={onWhatsNewOpen}
+            fontSize="10px" 
+            fontWeight="bold" 
+            color="whiteAlpha.600"
+            _hover={{ color: 'white' }}
+          >
+            Version 2.2
+          </Text>
         </HStack>
       </Box>
     </Flex>
