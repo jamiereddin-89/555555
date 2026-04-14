@@ -779,27 +779,6 @@ export default function App() {
                 _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
               />
             </Tooltip>
-            <Tooltip label="Projects">
-              <Menu>
-                <MenuButton
-                  as={IconButton}
-                  aria-label="Projects"
-                  icon={<FolderOpen size={16} />}
-                  variant="ghost"
-                  size="sm"
-                  color="whiteAlpha.600"
-                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
-                />
-                <Portal>
-                  <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
-                    <MenuItem icon={<Save size={14} />} onClick={onSaveOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save Current</MenuItem>
-                    <MenuItem icon={<FolderOpen size={14} />} onClick={onLoadOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Load Project</MenuItem>
-                    <Divider my={2} borderColor="whiteAlpha.100" />
-                    <MenuItem icon={<RotateCcw size={14} />} onClick={clearChat} color="red.400" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Clear All</MenuItem>
-                  </MenuList>
-                </Portal>
-              </Menu>
-            </Tooltip>
           </HStack>
         </Flex>
 
@@ -1108,29 +1087,49 @@ export default function App() {
         <Flex h={14} borderBottom="1px solid" borderColor="whiteAlpha.100" align="center" justify="space-between" px={4} bg="#0d0d11">
           <HStack spacing={4}>
             <HStack bg="whiteAlpha.50" p={1} borderRadius="lg">
-              <Button
-                size="xs"
-                variant={activeTab === 'preview' ? 'solid' : 'ghost'}
-                bg={activeTab === 'preview' ? 'whiteAlpha.200' : 'transparent'}
-                onClick={() => setActiveTab('preview')}
-                leftIcon={<Eye size={14} />}
-                fontSize="xs"
-                aria-label="Switch to Preview tab"
-              >
-                Preview
-              </Button>
-              <Button
-                size="xs"
-                variant={activeTab === 'code' ? 'solid' : 'ghost'}
-                bg={activeTab === 'code' ? 'whiteAlpha.200' : 'transparent'}
-                onClick={() => setActiveTab('code')}
-                leftIcon={<Code size={14} />}
-                fontSize="xs"
-                aria-label="Switch to Code tab"
-              >
-                Code
-              </Button>
+              <Tooltip label="Preview">
+                <IconButton
+                  size="xs"
+                  variant={activeTab === 'preview' ? 'solid' : 'ghost'}
+                  bg={activeTab === 'preview' ? 'whiteAlpha.200' : 'transparent'}
+                  onClick={() => setActiveTab('preview')}
+                  icon={<Eye size={14} />}
+                  aria-label="Switch to Preview tab"
+                />
+              </Tooltip>
+              <Tooltip label="Code">
+                <IconButton
+                  size="xs"
+                  variant={activeTab === 'code' ? 'solid' : 'ghost'}
+                  bg={activeTab === 'code' ? 'whiteAlpha.200' : 'transparent'}
+                  onClick={() => setActiveTab('code')}
+                  icon={<Code size={14} />}
+                  aria-label="Switch to Code tab"
+                />
+              </Tooltip>
             </HStack>
+
+            <Tooltip label="Projects">
+              <Menu>
+                <MenuButton
+                  as={IconButton}
+                  aria-label="Projects"
+                  icon={<FolderOpen size={16} />}
+                  variant="ghost"
+                  size="xs"
+                  color="whiteAlpha.600"
+                  _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+                />
+                <Portal>
+                  <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                    <MenuItem icon={<Save size={14} />} onClick={onSaveOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Save Current</MenuItem>
+                    <MenuItem icon={<FolderOpen size={14} />} onClick={onLoadOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Load Project</MenuItem>
+                    <Divider my={2} borderColor="whiteAlpha.100" />
+                    <MenuItem icon={<RotateCcw size={14} />} onClick={clearChat} color="red.400" bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Clear All</MenuItem>
+                  </MenuList>
+                </Portal>
+              </Menu>
+            </Tooltip>
 
             <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
               <Tooltip label="Undo">
@@ -1139,14 +1138,13 @@ export default function App() {
               <Tooltip label="Redo">
                 <IconButton aria-label="Redo" icon={<Redo2 size={16} />} size="xs" variant="ghost" isDisabled={historyIndex >= undoHistory.length - 1 || isLoading} onClick={redo} />
               </Tooltip>
+              <Tooltip label="Reload Preview">
+                <IconButton aria-label="Reload" icon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleReloadPreview} />
+              </Tooltip>
             </HStack>
 
             {activeTab === 'preview' && (
               <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
-                <Tooltip label="Reload Preview">
-                  <IconButton aria-label="Reload" icon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleReloadPreview} />
-                </Tooltip>
-                <Divider orientation="vertical" h={3} />
                 <Tooltip label="Desktop View">
                   <IconButton aria-label="Desktop" icon={<Monitor size={16} />} size="xs" variant={previewMode === 'desktop' ? 'solid' : 'ghost'} colorScheme={previewMode === 'desktop' ? 'blue' : 'gray'} onClick={() => setPreviewMode('desktop')} />
                 </Tooltip>
