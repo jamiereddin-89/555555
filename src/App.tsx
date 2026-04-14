@@ -106,7 +106,9 @@ import {
   Copy as CopyIcon,
   PanelLeftClose,
   PanelLeftOpen,
-  GripVertical
+  GripVertical,
+  ArrowUp,
+  FileCode2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Editor, { OnMount } from '@monaco-editor/react';
@@ -186,6 +188,9 @@ export default function App() {
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const toast = useToast();
@@ -568,8 +573,24 @@ export default function App() {
   }, [currentProjectId, syncProject, stopSync]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      setShowScrollTop(container.scrollTop > 300);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    chatContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const filteredMessages = messages.filter(msg => 
+    msg.content.toLowerCase().includes(chatSearchQuery.toLowerCase())
+  );
 
   const handleSend = async () => {
     if (!userInput.trim() || isLoading) return;
@@ -614,6 +635,16 @@ export default function App() {
       position: 'top'
     });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportHtml = () => {
+    const blob = new Blob([html], { type: 'text/html' });
+    saveAs(blob, `${projectName || 'project'}.html`);
+    toast({
+      title: "Project exported as HTML",
+      status: "success",
+      duration: 2000,
+    });
   };
 
   const handleExportZip = async () => {
@@ -909,64 +940,115 @@ export default function App() {
         </VStack>
 
         {/* Chat History */}
-        <Box flex={1} overflowY="auto" p={4} display="flex" flexDirection="column" gap={4}>
-          {messages.length === 0 && !isLoading && (
-            <VStack h="full" justify="center" opacity={0.4} spacing={4}>
-              <Box p={4} borderRadius="full" bg="whiteAlpha.100">
-                <Terminal size={32} />
-              </Box>
-              <VStack spacing={1}>
-                <Text fontSize="sm" fontWeight="medium">Ready to build?</Text>
-                <Text fontSize="xs" textAlign="center">
-                  {generationMode === 'website' 
-                    ? "Describe a website or landing page to get started." 
-                    : "Describe a UI component (e.g., 'a modern login form') to generate it."}
-                </Text>
-              </VStack>
-            </VStack>
-          )}
-
-          {messages?.map((msg, i) => (
-            <Flex key={i} justify={msg.role === 'user' ? 'flex-end' : 'flex-start'}>
-              <Box 
-                maxW="85%" 
-                p={3} 
-                borderRadius="2xl" 
-                borderTopRightRadius={msg.role === 'user' ? 'none' : '2xl'}
-                borderTopLeftRadius={msg.role === 'model' ? 'none' : '2xl'}
-                bg={msg.role === 'user' ? 'blue.600' : 'whiteAlpha.100'}
-                color={msg.role === 'user' ? 'white' : 'slate.200'}
-                border={msg.role === 'model' ? '1px solid' : 'none'}
-                borderColor="whiteAlpha.200"
-                fontSize="xs"
-                lineHeight="relaxed"
-                className="markdown-chat"
-              >
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              </Box>
-            </Flex>
-          ))}
-
-          {isLoading && (
-            <Flex justify="flex-start">
-              <VStack align="start" spacing={2} w="full">
-                <HStack spacing={2}>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  >
-                    <RefreshCw size={14} color="#4299E1" />
-                  </motion.div>
-                  <Text fontSize="xs" color="blue.400" fontWeight="bold">AI is generating...</Text>
-                </HStack>
-                <Box w="full" p={3} borderRadius="2xl" bg="whiteAlpha.50" border="1px dashed" borderColor="whiteAlpha.200">
-                  <SkeletonText noOfLines={3} spacing="2" skeletonHeight="2" />
-                  <Progress size="xs" isIndeterminate colorScheme="blue" mt={4} borderRadius="full" />
+        <Box flex={1} position="relative" display="flex" flexDirection="column" overflow="hidden">
+          <Box px={4} py={2} borderBottom="1px solid" borderColor="whiteAlpha.100">
+            <InputGroup size="xs">
+              <InputLeftElement pointerEvents="none">
+                <Search size={12} color="gray" />
+              </InputLeftElement>
+              <Input 
+                placeholder="Search chat..." 
+                bg="whiteAlpha.50" 
+                border="none" 
+                borderRadius="full"
+                value={chatSearchQuery}
+                onChange={(e) => setChatSearchQuery(e.target.value)}
+              />
+            </InputGroup>
+          </Box>
+          
+          <Box 
+            ref={chatContainerRef}
+            flex={1} 
+            overflowY="auto" 
+            p={4} 
+            display="flex" 
+            flexDirection="column" 
+            gap={4}
+          >
+            {filteredMessages.length === 0 && !isLoading && (
+              <VStack h="full" justify="center" opacity={0.4} spacing={4}>
+                <Box p={4} borderRadius="full" bg="whiteAlpha.100">
+                  <Terminal size={32} />
                 </Box>
+                <VStack spacing={1}>
+                  <Text fontSize="sm" fontWeight="medium">
+                    {chatSearchQuery ? "No messages found" : "Ready to build?"}
+                  </Text>
+                  <Text fontSize="xs" textAlign="center">
+                    {chatSearchQuery 
+                      ? "Try a different search term."
+                      : (generationMode === 'website' 
+                        ? "Describe a website or landing page to get started." 
+                        : "Describe a UI component to generate it.")}
+                  </Text>
+                </VStack>
               </VStack>
-            </Flex>
-          )}
-          <div ref={chatEndRef} />
+            )}
+
+            {filteredMessages?.map((msg, i) => (
+              <Flex key={i} justify={msg.role === 'user' ? 'flex-end' : 'flex-start'}>
+                <Box 
+                  maxW="85%" 
+                  p={3} 
+                  borderRadius="2xl" 
+                  borderTopRightRadius={msg.role === 'user' ? 'none' : '2xl'}
+                  borderTopLeftRadius={msg.role === 'model' ? 'none' : '2xl'}
+                  bg={msg.role === 'user' ? 'blue.600' : 'whiteAlpha.100'}
+                  color={msg.role === 'user' ? 'white' : 'slate.200'}
+                  border={msg.role === 'model' ? '1px solid' : 'none'}
+                  borderColor="whiteAlpha.200"
+                  fontSize="xs"
+                  lineHeight="relaxed"
+                  className="markdown-chat"
+                >
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </Box>
+              </Flex>
+            ))}
+
+            {isLoading && (
+              <Flex justify="flex-start">
+                <VStack align="start" spacing={2} w="full">
+                  <HStack spacing={2}>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    >
+                      <RefreshCw size={14} color="#4299E1" />
+                    </motion.div>
+                    <Text fontSize="xs" color="blue.400" fontWeight="bold">AI is generating...</Text>
+                  </HStack>
+                  <Box w="full" p={3} borderRadius="2xl" bg="whiteAlpha.50" border="1px dashed" borderColor="whiteAlpha.200">
+                    <SkeletonText noOfLines={3} spacing="2" skeletonHeight="2" />
+                    <Progress size="xs" isIndeterminate colorScheme="blue" mt={4} borderRadius="full" />
+                  </Box>
+                </VStack>
+              </Flex>
+            )}
+            <div ref={chatEndRef} />
+          </Box>
+
+          <AnimatePresence>
+            {showScrollTop && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                style={{ position: 'absolute', bottom: '16px', right: '16px', zIndex: 10 }}
+              >
+                <IconButton
+                  aria-label="Scroll to top"
+                  icon={<ArrowUp size={16} />}
+                  size="sm"
+                  colorScheme="blue"
+                  borderRadius="full"
+                  onClick={scrollToTop}
+                  boxShadow="lg"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Box>
 
         {/* Error Handling UI */}
@@ -1188,6 +1270,7 @@ export default function App() {
                 <Portal>
                   <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
                     <MenuItem icon={<Globe size={14} />} onClick={copyToClipboard} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Copy HTML</MenuItem>
+                    <MenuItem icon={<FileCode2 size={14} />} onClick={handleExportHtml} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export HTML</MenuItem>
                     <MenuItem icon={<FileJson size={14} />} onClick={handleExportZip} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Export ZIP</MenuItem>
                   </MenuList>
                 </Portal>
@@ -1284,6 +1367,52 @@ export default function App() {
                   
                   {/* Editor Toolbar Overlay */}
                   <HStack position="absolute" top={2} right={4} spacing={2} zIndex={5}>
+                    <Tooltip label="Undo (Ctrl+Z)">
+                      <IconButton 
+                        aria-label="Undo" 
+                        icon={<Undo2 size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="whiteAlpha.100" 
+                        _hover={{ bg: 'whiteAlpha.200' }}
+                        onClick={() => editorRef.current?.trigger('keyboard', 'undo', null)}
+                      />
+                    </Tooltip>
+                    <Tooltip label="Redo (Ctrl+Y)">
+                      <IconButton 
+                        aria-label="Redo" 
+                        icon={<Redo2 size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="whiteAlpha.100" 
+                        _hover={{ bg: 'whiteAlpha.200' }}
+                        onClick={() => editorRef.current?.trigger('keyboard', 'redo', null)}
+                      />
+                    </Tooltip>
+                    <Divider orientation="vertical" h={3} />
+                    <Tooltip label="Add Comments (AI)">
+                      <IconButton 
+                        aria-label="Add Comments" 
+                        icon={<Sparkles size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="purple.600" 
+                        _hover={{ bg: 'purple.700' }}
+                        onClick={() => executeAiAction("Analyze this HTML and add detailed comments explaining complex sections or non-obvious logic.")}
+                      />
+                    </Tooltip>
+                    <Tooltip label="Semantic Refactor (AI)">
+                      <IconButton 
+                        aria-label="Semantic Refactor" 
+                        icon={<Layout size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="cyan.600" 
+                        _hover={{ bg: 'cyan.700' }}
+                        onClick={() => executeAiAction("Refactor this HTML to use semantic HTML5 tags (header, nav, section, footer, etc.) where appropriate.")}
+                      />
+                    </Tooltip>
+                    <Divider orientation="vertical" h={3} />
                     <Tooltip label="Format Code (Ctrl+Shift+F)">
                       <IconButton 
                         aria-label="Format" 
