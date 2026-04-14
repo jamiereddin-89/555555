@@ -127,7 +127,7 @@ interface AppState {
   // API Actions
   fetchModels: (providerId?: string) => Promise<void>;
   generateImageAction: (prompt: string) => Promise<void>;
-  addProvider: (provider: Omit<AIProvider, 'availableModels'>) => void;
+  addProvider: (provider: Omit<AIProvider, 'id' | 'availableModels'>) => Promise<void>;
   removeProvider: (id: string) => void;
   
   // Firebase Sync
@@ -258,7 +258,20 @@ export const useStore = create<AppState>()(
 
         try {
           const onChunk = (chunk: string) => {
-            const cleaned = chunk.replace(/```html/g, '').replace(/```/g, '').trim();
+            // Robust extraction for streaming
+            let cleaned = chunk;
+            const htmlMatch = chunk.match(/```html\s*([\s\S]*?)(?:```|$)/i) || chunk.match(/```\s*([\s\S]*?)(?:```|$)/i);
+            
+            if (htmlMatch) {
+              cleaned = htmlMatch[1].trim();
+            } else {
+              // Try to find start of HTML if no fences yet
+              const htmlStart = chunk.search(/<!DOCTYPE|<html>|<div|<nav|<section|<header|<main/i);
+              if (htmlStart !== -1) {
+                cleaned = chunk.substring(htmlStart).trim();
+              }
+            }
+
             set({ html: cleaned });
             
             // Update the streaming message
@@ -307,10 +320,29 @@ export const useStore = create<AppState>()(
             }
           }
 
-          const cleanedHtml = finalResult.replace(/```html/g, '').replace(/```/g, '').trim();
+          // Final robust extraction
+          let cleanedHtml = finalResult;
+          const finalMatch = finalResult.match(/```html\s*([\s\S]*?)\s*```/i) || finalResult.match(/```\s*([\s\S]*?)\s*```/i);
           
-          if (generationMode === 'website' && !cleanedHtml.startsWith('<!DOCTYPE html>') && !cleanedHtml.includes('<html')) {
-            throw new Error("The AI returned an invalid HTML structure. Please try again.");
+          if (finalMatch) {
+            cleanedHtml = finalMatch[1].trim();
+          } else {
+            const htmlStart = finalResult.search(/<!DOCTYPE|<html>/i);
+            if (htmlStart !== -1) {
+              cleanedHtml = finalResult.substring(htmlStart).trim();
+            } else {
+              // If it's a component, it might not have <html> tags
+              cleanedHtml = finalResult.replace(/```html/g, '').replace(/```/g, '').trim();
+            }
+          }
+          
+          if (generationMode === 'website' && !cleanedHtml.toLowerCase().includes('<html') && !cleanedHtml.toLowerCase().includes('<!doctype')) {
+            // If it's a website but missing tags, try to wrap it if it looks like content
+            if (cleanedHtml.includes('<body') || cleanedHtml.includes('<div')) {
+              cleanedHtml = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <script src="https://cdn.tailwindcss.com"></script>\n  <title>Generated Site</title>\n</head>\n<body class="bg-gray-50 text-gray-900">\n  ${cleanedHtml}\n</body>\n</html>`;
+            } else {
+              throw new Error("The AI returned an invalid HTML structure. Please try again.");
+            }
           }
 
           set({ 
@@ -586,13 +618,19 @@ export const useStore = create<AppState>()(
         }
       },
 
-      addProvider: (provider) => {
+      addProvider: async (providerData) => {
+        const id = Math.random().toString(36).substring(7);
+        const newProvider = { ...providerData, id, availableModels: [] };
+        
         set((state) => ({
           settings: {
             ...state.settings,
-            providers: [...state.settings.providers, { ...provider, availableModels: [] }]
+            providers: [...state.settings.providers, newProvider]
           }
         }));
+
+        // Automatically fetch models for the new provider
+        await get().fetchModels(id);
       },
 
       removeProvider: (id) => {

@@ -628,10 +628,9 @@ export default function App() {
     });
   };
 
-  const handleAddProvider = () => {
+  const handleAddProvider = async () => {
     if (!newProvider.name || !newProvider.apiKey) return;
-    addProvider({
-      id: Math.random().toString(36).substring(7),
+    await addProvider({
       name: newProvider.name,
       apiKey: newProvider.apiKey,
       baseUrl: newProvider.baseUrl
@@ -640,8 +639,9 @@ export default function App() {
     setShowAddProvider(false);
     toast({
       title: "Provider Added",
+      description: "Available models have been fetched automatically.",
       status: "success",
-      duration: 2000,
+      duration: 3000,
     });
   };
 
