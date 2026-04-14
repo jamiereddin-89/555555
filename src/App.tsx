@@ -756,8 +756,7 @@ export default function App() {
               <Sparkles size={18} color="white" />
             </Box>
             <VStack align="start" spacing={0}>
-              <Text fontSize="sm" fontWeight="bold">Gemini Builder</Text>
-              <Text fontSize="10px" color="whiteAlpha.500" textTransform="uppercase" letterSpacing="widest">v2.5 Pro</Text>
+              <Text fontSize="sm" fontWeight="bold">AI Gen</Text>
             </VStack>
           </HStack>
           <HStack spacing={1}>
@@ -816,28 +815,35 @@ export default function App() {
         {/* Mode & Model Selector */}
         <VStack spacing={0} borderBottom="1px solid" borderColor="whiteAlpha.100">
           <HStack w="full" px={4} py={2} spacing={2} overflowX="auto" className="no-scrollbar">
-            <Tooltip label="Website Mode">
-              <IconButton
-                aria-label="Website"
-                icon={<Globe size={16} />}
-                size="sm"
-                borderRadius="full"
-                variant={generationMode === 'website' ? 'solid' : 'outline'}
-                colorScheme="blue"
-                onClick={() => setGenerationMode('website')}
-              />
-            </Tooltip>
-            <Tooltip label="Component Mode">
-              <IconButton
-                aria-label="Component"
-                icon={<BoxIcon size={16} />}
-                size="sm"
-                borderRadius="full"
-                variant={generationMode === 'component' ? 'solid' : 'outline'}
-                colorScheme="cyan"
-                onClick={() => setGenerationMode('component')}
-              />
-            </Tooltip>
+            <Menu>
+              <Tooltip label="Change Generation Mode">
+                <MenuButton
+                  as={IconButton}
+                  aria-label="Mode"
+                  icon={
+                    generationMode === 'website' ? <Globe size={16} /> : 
+                    generationMode === 'component' ? <BoxIcon size={16} /> : 
+                    <Layout size={16} />
+                  }
+                  size="sm"
+                  borderRadius="full"
+                  variant="solid"
+                  colorScheme={
+                    generationMode === 'website' ? "blue" : 
+                    generationMode === 'component' ? "cyan" : 
+                    "pink"
+                  }
+                />
+              </Tooltip>
+              <Portal>
+                <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                  <MenuItem icon={<Globe size={14} />} onClick={() => setGenerationMode('website')} bg={generationMode === 'website' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Website Mode</MenuItem>
+                  <MenuItem icon={<BoxIcon size={14} />} onClick={() => setGenerationMode('component')} bg={generationMode === 'component' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Component Mode</MenuItem>
+                  <MenuItem icon={<Layout size={14} />} onClick={onImageOpen} bg="transparent" _hover={{ bg: 'whiteAlpha.100' }}>Generate Image (Imagen)</MenuItem>
+                </MenuList>
+              </Portal>
+            </Menu>
+
             <Tooltip label="Thinking Mode">
               <IconButton
                 aria-label="Thinking"
@@ -849,17 +855,7 @@ export default function App() {
                 onClick={() => { setModel(ModelType.PRO); setIsThinking(true); }}
               />
             </Tooltip>
-            <Tooltip label="Generate Image (Imagen)">
-              <IconButton
-                aria-label="Imagen"
-                icon={<Layout size={16} />}
-                size="sm"
-                borderRadius="full"
-                variant="outline"
-                colorScheme="pink"
-                onClick={onImageOpen}
-              />
-            </Tooltip>
+            
             <Divider orientation="vertical" h={4} />
             <VStack align="start" spacing={0}>
               <Text fontSize="10px" color="whiteAlpha.500" fontWeight="bold">
@@ -893,7 +889,7 @@ export default function App() {
             <Divider orientation="vertical" h={2} />
             <Text textTransform="uppercase">{generationMode}</Text>
             <Spacer />
-            <Text opacity={0.6}>Powered by Gemini 2.0</Text>
+            <Text opacity={0.6}>Powered by {activeProvider?.name || 'AI'}</Text>
           </HStack>
           
           {generationMode === 'component' && (
@@ -1127,9 +1123,14 @@ export default function App() {
               isDisabled={isLoading || !userInput.trim()}
             />
           </Box>
-          <Text fontSize="10px" color="whiteAlpha.400" mt={2} textAlign="center">
-            Press Enter to send. Shift+Enter for new line.
-          </Text>
+          <Flex justify="space-between" align="center" mt={2}>
+            <Text fontSize="10px" color="whiteAlpha.400">
+              Token usage: ~{Math.round(html.length / 4)} tokens
+            </Text>
+            <Text fontSize="10px" color="whiteAlpha.400" textAlign="center">
+              Press Enter to send. Shift+Enter for new line.
+            </Text>
+          </Flex>
         </Box>
       </Box>
 
@@ -1196,7 +1197,7 @@ export default function App() {
                 <MenuButton
                   as={IconButton}
                   aria-label="Projects"
-                  icon={<FolderOpen size={16} />}
+                  icon={<FolderOpen size={14} />}
                   variant="ghost"
                   size="xs"
                   color="whiteAlpha.600"
@@ -1227,15 +1228,29 @@ export default function App() {
 
             {activeTab === 'preview' && (
               <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
-                <Tooltip label="Desktop View">
-                  <IconButton aria-label="Desktop" icon={<Monitor size={16} />} size="xs" variant={previewMode === 'desktop' ? 'solid' : 'ghost'} colorScheme={previewMode === 'desktop' ? 'blue' : 'gray'} onClick={() => setPreviewMode('desktop')} />
-                </Tooltip>
-                <Tooltip label="Tablet View">
-                  <IconButton aria-label="Tablet" icon={<Tablet size={16} />} size="xs" variant={previewMode === 'tablet' ? 'solid' : 'ghost'} colorScheme={previewMode === 'tablet' ? 'blue' : 'gray'} onClick={() => setPreviewMode('tablet')} />
-                </Tooltip>
-                <Tooltip label="Mobile View">
-                  <IconButton aria-label="Mobile" icon={<Smartphone size={16} />} size="xs" variant={previewMode === 'mobile' ? 'solid' : 'ghost'} colorScheme={previewMode === 'mobile' ? 'blue' : 'gray'} onClick={() => setPreviewMode('mobile')} />
-                </Tooltip>
+                <Menu>
+                  <Tooltip label="Responsive View">
+                    <MenuButton
+                      as={IconButton}
+                      aria-label="Responsive View"
+                      icon={
+                        previewMode === 'desktop' ? <Monitor size={14} /> : 
+                        previewMode === 'tablet' ? <Tablet size={14} /> : 
+                        <Smartphone size={14} />
+                      }
+                      size="xs"
+                      variant="ghost"
+                      colorScheme="blue"
+                    />
+                  </Tooltip>
+                  <Portal>
+                    <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={1000}>
+                      <MenuItem icon={<Monitor size={14} />} onClick={() => setPreviewMode('desktop')} bg={previewMode === 'desktop' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Desktop View</MenuItem>
+                      <MenuItem icon={<Tablet size={14} />} onClick={() => setPreviewMode('tablet')} bg={previewMode === 'tablet' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Tablet View</MenuItem>
+                      <MenuItem icon={<Smartphone size={14} />} onClick={() => setPreviewMode('mobile')} bg={previewMode === 'mobile' ? 'whiteAlpha.200' : 'transparent'} _hover={{ bg: 'whiteAlpha.100' }}>Mobile View</MenuItem>
+                    </MenuList>
+                  </Portal>
+                </Menu>
               </HStack>
             )}
           </HStack>
