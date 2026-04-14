@@ -1449,6 +1449,18 @@ export default function App() {
               </Menu>
             </Tooltip>
 
+            <Tooltip label="Load Project">
+              <IconButton
+                aria-label="Load Project"
+                icon={<FolderOpen size={14} />}
+                variant="ghost"
+                size="xs"
+                onClick={onLoadOpen}
+                color="whiteAlpha.600"
+                _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+              />
+            </Tooltip>
+
             <HStack spacing={1} borderLeft="1px solid" borderColor="whiteAlpha.100" pl={4}>
               <Tooltip label="Undo">
                 <IconButton aria-label="Undo" icon={<Undo2 size={16} />} size="xs" variant="ghost" isDisabled={historyIndex <= 0 || isLoading} onClick={undo} />
@@ -1687,6 +1699,28 @@ export default function App() {
                         onClick={() => editorRef.current?.trigger('keyboard', 'redo', null)}
                       />
                     </Tooltip>
+                    <Tooltip label="Copy All Code">
+                      <IconButton 
+                        aria-label="Copy Code" 
+                        icon={copied ? <Check size={14} /> : <Copy size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg={copied ? "green.500" : "whiteAlpha.100"}
+                        _hover={{ bg: copied ? "green.600" : "whiteAlpha.200" }}
+                        onClick={copyToClipboard}
+                      />
+                    </Tooltip>
+                    <Tooltip label="Format Code (Shift+Alt+F)">
+                      <IconButton 
+                        aria-label="Format" 
+                        icon={<Terminal size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="whiteAlpha.100" 
+                        _hover={{ bg: 'whiteAlpha.200' }}
+                        onClick={() => editorRef.current?.getAction('editor.action.formatDocument')?.run()}
+                      />
+                    </Tooltip>
                     <Divider orientation="vertical" h={3} />
                     <Tooltip label="Add Comments (AI)">
                       <IconButton 
@@ -1889,9 +1923,14 @@ export default function App() {
                       <Text fontSize="10px" color="whiteAlpha.500">{new Date(project.timestamp).toLocaleString()} • {project.mode}</Text>
                     </VStack>
                     <HStack>
-                      <IconButton aria-label="Copy" icon={<CopyIcon size={14} />} size="xs" colorScheme="teal" variant="ghost" onClick={() => copyProject(project.id)} />
-                      <Button size="xs" colorScheme="blue" onClick={() => { loadProject(project.id); setProjectName(project.name); onLoadClose(); }}>Load</Button>
-                      <IconButton aria-label="Delete" icon={<Trash2 size={14} />} size="xs" colorScheme="red" variant="ghost" onClick={() => deleteProject(project.id)} />
+                      <IconButton aria-label="Copy" icon={<CopyIcon size={14} />} size="xs" colorScheme="teal" variant="ghost" onClick={() => { copyProject(project.id); toast({ title: "Project copied", status: "success", duration: 2000 }); }} />
+                      <Button size="xs" colorScheme="blue" onClick={() => { 
+                        loadProject(project.id); 
+                        setProjectName(project.name); 
+                        onLoadClose(); 
+                        toast({ title: `Loaded: ${project.name}`, status: "info", duration: 2000 });
+                      }}>Load</Button>
+                      <IconButton aria-label="Delete" icon={<Trash2 size={14} />} size="xs" colorScheme="red" variant="ghost" onClick={() => { deleteProject(project.id); toast({ title: "Project deleted", status: "error", duration: 2000 }); }} />
                     </HStack>
                   </HStack>
                 ))}
@@ -2317,7 +2356,11 @@ export default function App() {
                     borderRadius="lg" 
                     cursor="pointer"
                     _hover={{ bg: 'whiteAlpha.100' }}
-                    onClick={() => { revertToVersion(v.id); onVersionsClose(); }}
+                    onClick={() => { 
+                      revertToVersion(v.id); 
+                      onVersionsClose(); 
+                      toast({ title: "Reverted to selected version", status: "success", duration: 2000 });
+                    }}
                     position="relative"
                   >
                     <HStack justify="space-between">
@@ -2325,7 +2368,22 @@ export default function App() {
                         <Text fontSize="xs" fontWeight="bold" noOfLines={1}>{v.description}</Text>
                         <Text fontSize="10px" color="whiteAlpha.500">{new Date(v.timestamp).toLocaleString()}</Text>
                       </VStack>
-                      <ChevronRight size={14} />
+                      <HStack>
+                        <Tooltip label="Preview this version">
+                          <IconButton 
+                            size="xs" 
+                            icon={<Eye size={12} />} 
+                            aria-label="Preview" 
+                            variant="ghost" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Temporary preview logic could go here
+                              toast({ title: "Previewing version...", status: "info", duration: 1000 });
+                            }} 
+                          />
+                        </Tooltip>
+                        <ChevronRight size={14} />
+                      </HStack>
                     </HStack>
                     {i === 0 && (
                       <Badge position="absolute" top={-2} right={2} colorScheme="green" fontSize="8px">Current</Badge>
