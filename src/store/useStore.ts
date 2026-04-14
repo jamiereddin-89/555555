@@ -113,6 +113,7 @@ interface AppState {
   // Complex Actions
   addMessage: (msg: ChatMessage) => void;
   clearChat: () => void;
+  clearChatAndSave: () => Promise<void>;
   executeAiAction: (prompt: string) => Promise<void>;
   retryLastAction: () => Promise<void>;
   
@@ -206,7 +207,9 @@ export const useStore = create<AppState>()(
       updateSettings: (newSettings) => set((state) => ({ settings: { ...state.settings, ...newSettings } })),
       setSearchQuery: (searchQuery) => set({ searchQuery }),
 
-      addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+      addMessage: (msg) => set((state) => ({ 
+        messages: [...state.messages, { ...msg, timestamp: msg.timestamp || Date.now() }] 
+      })),
       
       clearChat: () => set({ 
         messages: [], 
@@ -217,6 +220,14 @@ export const useStore = create<AppState>()(
         currentProjectId: null,
         versions: []
       }),
+
+      clearChatAndSave: async () => {
+        const { html, messages, currentProjectId, saveProject } = get();
+        if (html || messages.length > 0) {
+          await saveProject(currentProjectId ? `Snapshot before clear` : 'New Project Snapshot');
+        }
+        get().clearChat();
+      },
 
       pushToHistory: (html) => {
         const { history, historyIndex } = get();
@@ -258,7 +269,22 @@ export const useStore = create<AppState>()(
         const actionType = generationMode === 'component' ? 'component' : (html ? 'update' : 'generate');
         set({ lastAction: { type: actionType, payload: prompt } });
 
-        const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+        // Find the provider that owns this model
+        let activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+        
+        // If the model is not in the active provider, search other providers
+        const modelInActive = activeProvider?.availableModels.some(m => m.name === model) || 
+                             (activeProvider?.id === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].includes(model as any));
+        
+        if (!modelInActive) {
+          const owningProvider = settings.providers.find(p => 
+            p.availableModels.some(m => m.name === model)
+          );
+          if (owningProvider) {
+            activeProvider = owningProvider;
+          }
+        }
+
         const apiKey = activeProvider?.apiKey || settings.apiKey || undefined;
 
         // Add initial model message for streaming

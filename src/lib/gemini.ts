@@ -12,6 +12,7 @@ export enum ModelType {
 export interface ChatMessage {
   role: "user" | "model";
   content: string;
+  timestamp?: number;
 }
 
 export async function generateImage(description: string): Promise<string> {

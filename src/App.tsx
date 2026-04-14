@@ -186,6 +186,7 @@ export default function App() {
     removeProvider,
     toggleFavoriteModel,
     addManualModel,
+    clearChatAndSave,
     modelSearchQuery,
     setModelSearchQuery,
     lastSavedHtml,
@@ -224,6 +225,7 @@ export default function App() {
   const { isOpen: isLoadOpen, onOpen: onLoadOpen, onClose: onLoadClose } = useDisclosure();
   const { isOpen: isSettingsOpen, onOpen: onSettingsOpen, onClose: onSettingsClose } = useDisclosure();
   const { isOpen: isVersionsOpen, onOpen: onVersionsOpen, onClose: onVersionsClose } = useDisclosure();
+  const { isOpen: isWhatsNewOpen, onOpen: onWhatsNewOpen, onClose: onWhatsNewClose } = useDisclosure();
   const { isOpen: isImageOpen, onOpen: onImageOpen, onClose: onImageClose } = useDisclosure();
   const { isOpen: isProviderDetailOpen, onOpen: onProviderDetailOpen, onClose: onProviderDetailClose } = useDisclosure();
 
@@ -830,6 +832,14 @@ export default function App() {
     return matchesSearch && matchesFree;
   });
 
+  const allFilteredModels = (settings.providers || []).flatMap(p => 
+    (p.availableModels || []).map(m => ({ ...m, providerName: p.name, providerId: p.id }))
+  ).filter(m => {
+    const matchesSearch = (m.displayName || m.name || '').toLowerCase().includes(modelSearchQuery.toLowerCase());
+    const matchesFree = !settings.showFreeOnly || isFreeModel(m);
+    return matchesSearch && matchesFree;
+  });
+
   const EXAMPLE_CATEGORIES = [
     {
       name: 'Layouts & Pages',
@@ -1059,8 +1069,8 @@ export default function App() {
 
         {/* Chat History */}
         <Box flex={1} position="relative" display="flex" flexDirection="column" overflow="hidden">
-          <Box px={4} py={2} borderBottom="1px solid" borderColor="whiteAlpha.100">
-            <InputGroup size="xs">
+          <Box px={4} py={2} borderBottom="1px solid" borderColor="whiteAlpha.100" display="flex" alignItems="center" gap={2}>
+            <InputGroup size="xs" flex={1}>
               <InputLeftElement pointerEvents="none">
                 <Search size={12} color="gray" />
               </InputLeftElement>
@@ -1073,6 +1083,17 @@ export default function App() {
                 onChange={(e) => setChatSearchQuery(e.target.value)}
               />
             </InputGroup>
+            <Tooltip label="Clear Chat & Save Snapshot">
+              <IconButton 
+                aria-label="Clear Chat" 
+                icon={<Trash2 size={14} />} 
+                size="xs" 
+                variant="ghost" 
+                color="whiteAlpha.600"
+                _hover={{ bg: 'red.600', color: 'white' }}
+                onClick={clearChatAndSave}
+              />
+            </Tooltip>
           </Box>
           
           <Box 
@@ -1105,7 +1126,15 @@ export default function App() {
             )}
 
             {filteredMessages?.map((msg, i) => (
-              <Flex key={i} justify={msg.role === 'user' ? 'flex-end' : 'flex-start'}>
+              <Flex key={i} justify={msg.role === 'user' ? 'flex-end' : 'flex-start'} direction="column" align={msg.role === 'user' ? 'flex-end' : 'flex-start'} className="group">
+                <HStack spacing={2} mb={1} px={1}>
+                  <Text fontSize="10px" fontWeight="bold" color="whiteAlpha.600">
+                    {msg.role === 'user' ? 'You' : (model.toString().split('/').pop() || 'AI')}
+                  </Text>
+                  <Text fontSize="10px" color="whiteAlpha.400">
+                    | {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </Text>
+                </HStack>
                 <Box 
                   maxW="85%" 
                   p={3} 
@@ -1119,9 +1148,45 @@ export default function App() {
                   fontSize="xs"
                   lineHeight="relaxed"
                   className="markdown-chat"
+                  position="relative"
+                  _hover={{ ".chat-actions": { opacity: 1 } }}
                 >
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  
+                  {/* Chat Actions */}
+                  <HStack 
+                    className="chat-actions"
+                    position="absolute" 
+                    bottom="-24px" 
+                    right={msg.role === 'user' ? 0 : 'auto'}
+                    left={msg.role === 'model' ? 0 : 'auto'}
+                    spacing={1} 
+                    opacity={0} 
+                    transition="opacity 0.2s"
+                    zIndex={5}
+                    py={1}
+                  >
+                    {msg.role === 'user' && (
+                      <Tooltip label="Resend">
+                        <IconButton aria-label="Resend" icon={<RotateCcw size={10} />} size="xs" variant="ghost" color="whiteAlpha.400" _hover={{ color: 'white', bg: 'whiteAlpha.100' }} onClick={() => executeAiAction(msg.content)} />
+                      </Tooltip>
+                    )}
+                    <Tooltip label="Copy">
+                      <IconButton aria-label="Copy" icon={<Copy size={10} />} size="xs" variant="ghost" color="whiteAlpha.400" _hover={{ color: 'white', bg: 'whiteAlpha.100' }} onClick={() => navigator.clipboard.writeText(msg.content)} />
+                    </Tooltip>
+                    <Tooltip label="Edit">
+                      <IconButton aria-label="Edit" icon={<Edit3 size={10} />} size="xs" variant="ghost" color="whiteAlpha.400" _hover={{ color: 'white', bg: 'whiteAlpha.100' }} onClick={() => setUserInput(msg.content)} />
+                    </Tooltip>
+                    <Tooltip label="Delete">
+                      <IconButton aria-label="Delete" icon={<Trash2 size={10} />} size="xs" variant="ghost" color="whiteAlpha.400" _hover={{ color: 'red.400', bg: 'whiteAlpha.100' }} onClick={() => {
+                        const newMsgs = [...messages];
+                        newMsgs.splice(i, 1);
+                        useStore.getState().setMessages(newMsgs);
+                      }} />
+                    </Tooltip>
+                  </HStack>
                 </Box>
+                <Box h={6} /> {/* Spacer for actions */}
               </Flex>
             ))}
 
@@ -1227,13 +1292,13 @@ export default function App() {
               <Portal>
                 <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000} maxH="300px" overflowY="auto">
                   <Text px={3} py={1} fontSize="10px" fontWeight="bold" color="whiteAlpha.400" textTransform="uppercase">Favorite Models</Text>
-                  {(settings.favoriteModels || []).map(m => {
+                  {(settings.favoriteModels || []).map((m, i) => {
                     const provider = (settings.providers || []).find(p => p.availableModels.some(am => am.name === m));
                     const displayName = m.split('/').pop();
                     const fullName = provider ? `${provider.name} - ${displayName}` : displayName;
                     return (
                       <MenuItem 
-                        key={m} 
+                        key={`fav-${m}-${i}`} 
                         fontSize="xs" 
                         bg="transparent" 
                         _hover={{ bg: 'whiteAlpha.100' }}
@@ -1248,28 +1313,27 @@ export default function App() {
                   {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => {
                     const name = (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase();
                     const matchesSearch = name.includes(modelSearchQuery.toLowerCase());
-                    const matchesFree = !settings.showFreeOnly || true; // Gemini models are usually free in this context or we don't have price info
-                    return matchesSearch && matchesFree;
-                  }).map(m => (
+                    return matchesSearch;
+                  }).map((m, i) => (
                     <MenuItem 
-                      key={m} 
+                      key={`google-${m}-${i}`} 
                       fontSize="xs" 
                       bg="transparent" 
                       _hover={{ bg: 'whiteAlpha.100' }}
                       onClick={() => setModel(m)}
                     >
-                      {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
+                      Google - {m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}
                     </MenuItem>
                   ))}
-                  {filteredModels?.map(m => (
+                  {allFilteredModels?.map((m, i) => (
                     <MenuItem 
-                      key={m.name} 
+                      key={`all-${m.providerId}-${m.name}-${i}`} 
                       fontSize="xs" 
                       bg="transparent" 
                       _hover={{ bg: 'whiteAlpha.100' }}
                       onClick={() => setModel(m.name)}
                     >
-                      {activeProvider?.name} - {m.displayName || m.name}
+                      {m.providerName} - {m.displayName || m.name}
                     </MenuItem>
                   ))}
                   <Divider my={1} borderColor="whiteAlpha.100" />
@@ -1647,6 +1711,17 @@ export default function App() {
                         onClick={() => editorRef.current?.getAction('editor.action.formatDocument')?.run()}
                       />
                     </Tooltip>
+                    <Tooltip label="Copy All Code">
+                      <IconButton 
+                        aria-label="Copy All" 
+                        icon={<CopyIcon size={14} />} 
+                        size="xs" 
+                        variant="solid" 
+                        bg="whiteAlpha.100" 
+                        _hover={{ bg: 'whiteAlpha.200' }}
+                        onClick={copyToClipboard}
+                      />
+                    </Tooltip>
                     <Tooltip label="Save Project (Ctrl+S)">
                       <IconButton 
                         aria-label="Save" 
@@ -1855,7 +1930,7 @@ export default function App() {
                           <MenuButton as={IconButton} icon={<Plus size={12} />} size="xs" variant="outline" />
                         </Tooltip>
                         <Portal>
-                          <MenuList bg="#1a1a24" borderColor="whiteAlpha.200">
+                          <MenuList bg="#1a1a24" borderColor="whiteAlpha.200" zIndex={2000}>
                             {PRESET_PROVIDERS.map(p => (
                               <MenuItem 
                                 key={p.name} 
@@ -2031,8 +2106,8 @@ export default function App() {
                         />
                       </InputGroup>
                       <VStack align="stretch" spacing={2} maxH="150px" overflowY="auto" className="no-scrollbar">
-                        {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase().includes(modelSearchQuery.toLowerCase())).map(m => (
-                          <HStack key={m} justify="space-between" p={1}>
+                        {settings.activeProviderId === 'google' && [ModelType.FLASH, ModelType.PRO, ModelType.LITE].filter(m => (m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite').toLowerCase().includes(modelSearchQuery.toLowerCase())).map((m, i) => (
+                          <HStack key={`settings-google-${m}-${i}`} justify="space-between" p={1}>
                             <Text fontSize="xs">{m === ModelType.FLASH ? 'Gemini 2.0 Flash' : m === ModelType.PRO ? 'Gemini 2.0 Pro' : 'Gemini 2.0 Lite'}</Text>
                             <IconButton 
                               aria-label="Favorite" 
@@ -2043,8 +2118,8 @@ export default function App() {
                             />
                           </HStack>
                         ))}
-                        {filteredModels?.map(m => (
-                          <HStack key={m.name} justify="space-between" p={1}>
+                        {filteredModels?.map((m, i) => (
+                          <HStack key={`settings-all-${m.name}-${i}`} justify="space-between" p={1}>
                             <Text fontSize="xs">{m.displayName || m.name}</Text>
                             <IconButton 
                               aria-label="Favorite" 
@@ -2254,6 +2329,93 @@ export default function App() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Whats New Modal */}
+      <Modal isOpen={isWhatsNewOpen} onClose={onWhatsNewClose} size="lg">
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent bg="#1a1a24" color="white" borderColor="whiteAlpha.200" border="1px solid">
+          <ModalHeader fontSize="md">What's New in Version 2.2</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody maxH="500px" overflowY="auto" pb={6}>
+            <VStack align="stretch" spacing={6}>
+              <Box>
+                <HStack justify="space-between" mb={2}>
+                  <Badge colorScheme="blue">v2.2</Badge>
+                  <Text fontSize="xs" color="whiteAlpha.400">April 14, 2026</Text>
+                </HStack>
+                <VStack align="start" spacing={2} pl={2} borderLeft="2px solid" borderColor="blue.500">
+                  <Text fontSize="xs">• Added Chat Clear/Snapshot feature to reset context safely.</Text>
+                  <Text fontSize="xs">• Enhanced Chat Bubbles with timestamps and action buttons (Resend, Copy, Edit, Delete).</Text>
+                  <Text fontSize="xs">• Improved AI Provider management with intelligent model-to-provider routing.</Text>
+                  <Text fontSize="xs">• Added Editor Copy button for quick code extraction.</Text>
+                  <Text fontSize="xs">• Fixed Preset Providers pop-up visibility issues.</Text>
+                  <Text fontSize="xs">• Updated model dropdown to show all available models from all providers.</Text>
+                </VStack>
+              </Box>
+              <Box>
+                <HStack justify="space-between" mb={2}>
+                  <Badge colorScheme="gray">v2.0</Badge>
+                  <Text fontSize="xs" color="whiteAlpha.400">April 13, 2026</Text>
+                </HStack>
+                <VStack align="start" spacing={2} pl={2} borderLeft="2px solid" borderColor="whiteAlpha.200">
+                  <Text fontSize="xs">• Initial release with multi-provider support (OpenRouter, Pollinations, etc.).</Text>
+                  <Text fontSize="xs">• Advanced Project management system with local & cloud sync.</Text>
+                  <Text fontSize="xs">• Real-time preview with device simulation (Mobile, Tablet, Desktop).</Text>
+                  <Text fontSize="xs">• AI-powered refactoring and semantic HTML optimization.</Text>
+                </VStack>
+              </Box>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" colorScheme="blue" onClick={onWhatsNewClose}>Got it</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* App Footer */}
+      <Box 
+        as="footer" 
+        w="full" 
+        py={2} 
+        px={4} 
+        bg="#0d0d11" 
+        borderTop="1px solid" 
+        borderColor="whiteAlpha.100"
+        position="absolute"
+        bottom={0}
+        left={0}
+        zIndex={10}
+      >
+        <HStack justify="space-between">
+          <HStack spacing={1}>
+            <Text fontSize="10px" color="whiteAlpha.500">Created By</Text>
+            <Text 
+              as="a" 
+              href="https://jayreddin.github.io" 
+              target="_blank" 
+              fontSize="10px" 
+              fontWeight="bold" 
+              color="blue.400"
+              _hover={{ textDecoration: 'underline' }}
+            >
+              Jamie Reddin
+            </Text>
+          </HStack>
+          <HStack spacing={2}>
+            <Text fontSize="10px" color="whiteAlpha.400">|</Text>
+            <Text 
+              as="button" 
+              onClick={onWhatsNewOpen}
+              fontSize="10px" 
+              fontWeight="bold" 
+              color="whiteAlpha.600"
+              _hover={{ color: 'white' }}
+            >
+              Version 2.2
+            </Text>
+          </HStack>
+        </HStack>
+      </Box>
     </Flex>
   );
 }
